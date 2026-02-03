@@ -1,0 +1,73 @@
+---
+title: "Errors"
+---
+
+The billing.io API uses conventional HTTP status codes to indicate the success or failure of a request. Codes in the `2xx` range indicate success, codes in the `4xx` range indicate a client error, and codes in the `5xx` range indicate a server error.
+
+## Error Format
+
+All error responses follow a consistent structure:
+
+```json
+{
+  "error": {
+    "type": "invalid_request",
+    "code": "missing_required_field",
+    "message": "The 'amount_usd' field is required.",
+    "param": "amount_usd"
+  }
+}
+```
+
+| Field     | Type              | Description                                              |
+|-----------|-------------------|----------------------------------------------------------|
+| `type`    | string            | The error category (see error types below).              |
+| `code`    | string            | A machine-readable error code for programmatic handling. |
+| `message` | string            | A human-readable description of the error.               |
+| `param`   | string or null    | The request parameter that caused the error, if applicable. |
+
+## HTTP Status Codes
+
+| Status Code | Meaning               | Description                                                                 |
+|-------------|-----------------------|-----------------------------------------------------------------------------|
+| `400`       | Bad Request           | The request was malformed or missing required fields.                       |
+| `401`       | Unauthorized          | Authentication failed. Check your API key.                                  |
+| `404`       | Not Found             | The requested resource does not exist.                                      |
+| `409`       | Conflict / Idempotency| The idempotency key was reused with different request parameters.           |
+| `429`       | Rate Limited          | Too many requests. Back off and retry after the `Retry-After` period.       |
+| `500`       | Internal Error        | An unexpected server error occurred. Contact support if this persists.      |
+
+## Error Types
+
+| Type                    | HTTP Status | Description                                          |
+|-------------------------|-------------|------------------------------------------------------|
+| `invalid_request`       | 400         | The request body or query parameters are invalid.    |
+| `authentication_error`  | 401         | The API key is missing, invalid, or revoked.         |
+| `not_found`             | 404         | The requested resource was not found.                |
+| `idempotency_conflict`  | 409         | Idempotency key reused with different parameters.    |
+| `rate_limited`          | 429         | Rate limit exceeded for this API key.                |
+| `internal_error`        | 500         | An internal server error occurred.                   |
+
+## Rate Limiting
+
+When you exceed the rate limit, the API returns a `429` response with the following headers:
+
+| Header                  | Description                                  |
+|-------------------------|----------------------------------------------|
+| `X-RateLimit-Limit`     | Maximum requests allowed per window.         |
+| `X-RateLimit-Remaining` | Requests remaining in the current window.    |
+| `X-RateLimit-Reset`     | Unix timestamp when the window resets.       |
+| `Retry-After`           | Seconds to wait before retrying.             |
+
+## Example Error Response
+
+```json
+{
+  "error": {
+    "type": "not_found",
+    "code": "checkout_not_found",
+    "message": "No checkout found with ID co_abc123.",
+    "param": "checkout_id"
+  }
+}
+```

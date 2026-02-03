@@ -1,0 +1,166 @@
+---
+title: "billing.js"
+description: "Drop-in checkout overlay for the browser"
+---
+
+billing.js is a client-side library that adds a pre-built checkout overlay to your site. No server-side rendering required for the payment UI -- just create a checkout via the API and open the overlay.
+
+<CardGroup cols={2}>
+  <Card title="npm" icon="npm" href="https://www.npmjs.com/package/@billing-io/js">
+    @billing-io/js
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/billing-io/billing.js">
+    billing-io/billing.js
+  </Card>
+</CardGroup>
+
+## Installation
+
+### CDN (recommended)
+
+```html
+<script src="https://js.billing.io/v1/billing.js"></script>
+```
+
+### npm
+
+```bash
+npm install @billing-io/js
+```
+
+```javascript
+import Billing from "@billing-io/js";
+```
+
+## Quick Start
+
+```html
+<button id="pay">Pay $49.99</button>
+
+<script src="https://js.billing.io/v1/billing.js"></script>
+<script>
+  const billing = Billing("pk_live_...");
+
+  document.getElementById("pay").addEventListener("click", () => {
+    billing.openCheckout({
+      checkoutId: "chk_abc123",
+      onSuccess: (result) => {
+        console.log("Payment confirmed!", result.checkout_id);
+      },
+      onCancel: () => {
+        console.log("Customer closed the overlay");
+      },
+    });
+  });
+</script>
+```
+
+<Note>
+billing.js uses your **publishable key** (`pk_live_...` or `pk_test_...`), not your secret key. The publishable key is safe to include in client-side code.
+</Note>
+
+## Open Checkout Overlay
+
+Display a payment overlay on top of your page. The customer stays on your site while completing the payment.
+
+```javascript
+const billing = Billing("pk_live_...");
+
+billing.openCheckout({
+  checkoutId: "chk_abc123",
+  overlay: "centered",
+  onSuccess: (result) => {
+    console.log(result.checkout_id);
+    console.log(result.status); // "confirmed"
+  },
+  onCancel: () => {
+    // customer closed overlay
+  },
+  onError: (error) => {
+    console.error(error.message);
+  },
+  onStatusChange: (status) => {
+    // real-time status updates
+    console.log(status.status);         // "pending" → "confirming" → "confirmed"
+    console.log(status.confirmations);
+  },
+});
+```
+
+## Overlay Styles
+
+Choose from 5 built-in overlay styles:
+
+| Style | Description |
+| ----- | ----------- |
+| `centered` | Centered modal dialog (default) |
+| `panel` | Slide-in panel from the right |
+| `bottom` | Bottom sheet |
+| `fullscreen` | Full-screen takeover |
+| `popup` | Opens in a new popup window |
+
+```javascript
+billing.openCheckout({
+  checkoutId: "chk_abc123",
+  overlay: "panel",
+  onSuccess: (result) => {
+    /* ... */
+  },
+});
+```
+
+## Redirect to Checkout
+
+Alternatively, redirect the customer to a hosted checkout page:
+
+```javascript
+billing.redirectToCheckout({
+  checkoutId: "chk_abc123",
+  returnUrl: "https://yoursite.com/success",
+  cancelUrl: "https://yoursite.com/cancel",
+});
+```
+
+## Close the Overlay
+
+Programmatically close an open overlay:
+
+```javascript
+billing.close();
+```
+
+## Full Example
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Checkout</title>
+  </head>
+  <body>
+    <button id="pay">Pay $49.99</button>
+
+    <script src="https://js.billing.io/v1/billing.js"></script>
+    <script>
+      const billing = Billing("pk_live_...");
+
+      document.getElementById("pay").addEventListener("click", async () => {
+        // Create checkout on your server first
+        const res = await fetch("/api/create-checkout", { method: "POST" });
+        const { checkout_id } = await res.json();
+
+        billing.openCheckout({
+          checkoutId: checkout_id,
+          overlay: "centered",
+          onSuccess: (result) => {
+            window.location.href = "/success?id=" + result.checkout_id;
+          },
+          onCancel: () => {
+            console.log("Cancelled");
+          },
+        });
+      });
+    </script>
+  </body>
+</html>
+```

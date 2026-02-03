@@ -1,0 +1,137 @@
+---
+title: "Java"
+description: "Official billing.io SDK for Java"
+---
+
+The official billing.io SDK for Java 11+.
+
+<CardGroup cols={2}>
+  <Card title="Maven Central" icon="java" href="https://central.sonatype.com/artifact/io.billing/billingio-java">
+    io.billing:billingio-java
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/billingio/billingio-java">
+    billingio/billingio-java
+  </Card>
+</CardGroup>
+
+## Installation
+
+### Maven
+
+```xml
+<dependency>
+  <groupId>io.billing</groupId>
+  <artifactId>billingio-java</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+### Gradle
+
+```groovy
+implementation "io.billing:billingio-java:1.0.0"
+```
+
+## Quick Start
+
+```java
+import io.billing.BillingIO;
+import io.billing.model.Checkout;
+
+BillingIO billing = BillingIO.builder()
+    .apiKey("sk_live_...")
+    .build();
+
+Checkout checkout = billing.checkouts().create(
+    Checkout.CreateParams.builder()
+        .amountUsd(49.99)
+        .chain("tron")
+        .token("USDT")
+        .putMetadata("order_id", "ord_12345")
+        .build()
+);
+
+System.out.println(checkout.getCheckoutId());
+System.out.println(checkout.getDepositAddress());
+```
+
+## List Checkouts with Pagination
+
+```java
+import io.billing.model.CheckoutList;
+
+CheckoutList page = billing.checkouts().list(
+    Checkout.ListParams.builder()
+        .limit(10)
+        .build()
+);
+
+for (Checkout checkout : page.getData()) {
+    System.out.println(checkout.getCheckoutId() + " - " + checkout.getStatus());
+}
+
+// Fetch next page
+if (page.getCursor() != null) {
+    CheckoutList nextPage = billing.checkouts().list(
+        Checkout.ListParams.builder()
+            .cursor(page.getCursor())
+            .limit(10)
+            .build()
+    );
+}
+```
+
+## Get Checkout Status
+
+```java
+import io.billing.model.CheckoutStatus;
+
+CheckoutStatus status = billing.checkouts().getStatus("chk_abc123");
+
+System.out.println(status.getStatus());                // "confirming"
+System.out.println(status.getConfirmations());          // 8
+System.out.println(status.getRequiredConfirmations());  // 19
+```
+
+## Webhook Signature Verification (Spring Boot)
+
+```java
+import io.billing.webhook.WebhookSignature;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+public class WebhookController {
+
+    @PostMapping("/webhooks/billing")
+    public ResponseEntity<String> handleWebhook(
+            @RequestBody String body,
+            @RequestHeader("X-Billing-Signature") String signature) {
+
+        boolean isValid = WebhookSignature.verify(
+            body, signature, "whsec_..."
+        );
+
+        if (!isValid) {
+            return ResponseEntity.status(401).body("Invalid signature");
+        }
+
+        // process event...
+        return ResponseEntity.ok("OK");
+    }
+}
+```
+
+## Error Handling
+
+```java
+import io.billing.exception.BillingIOException;
+
+try {
+    billing.checkouts().create(params);
+} catch (BillingIOException e) {
+    System.out.println(e.getStatus());  // 422
+    System.out.println(e.getCode());    // "validation_error"
+    System.out.println(e.getMessage()); // "amount_usd must be positive"
+}
+```

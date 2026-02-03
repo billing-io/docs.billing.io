@@ -1,0 +1,146 @@
+---
+title: "React"
+description: "React hooks for billing.io"
+---
+
+React hooks for billing.io. Built on top of `@billing-io/sdk` with built-in state management, auto-polling, and TypeScript support.
+
+<CardGroup cols={2}>
+  <Card title="npm" icon="npm" href="https://www.npmjs.com/package/@billing-io/react">
+    @billing-io/react
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/billing-io/sdk-react">
+    billing-io/sdk-react
+  </Card>
+</CardGroup>
+
+## Installation
+
+```bash
+npm install @billing-io/react @billing-io/sdk
+```
+
+<Note>
+`@billing-io/sdk` and `react >= 18` are peer dependencies.
+</Note>
+
+## Setup
+
+Wrap your app with `BillingProvider`:
+
+```tsx
+import { BillingProvider } from "@billing-io/react";
+
+function App() {
+  return (
+    <BillingProvider apiKey="sk_live_...">
+      <YourApp />
+    </BillingProvider>
+  );
+}
+```
+
+## Create a Checkout
+
+```tsx
+import { useCreateCheckout } from "@billing-io/react";
+
+function CheckoutButton() {
+  const { createCheckout, data, loading, error } = useCreateCheckout();
+
+  const handleClick = async () => {
+    await createCheckout({
+      amount_usd: 49.99,
+      chain: "tron",
+      token: "USDT",
+    });
+  };
+
+  return (
+    <div>
+      <button onClick={handleClick} disabled={loading}>
+        {loading ? "Creating..." : "Pay $49.99"}
+      </button>
+      {data && <p>Send payment to: {data.deposit_address}</p>}
+      {error && <p>Error: {error.message}</p>}
+    </div>
+  );
+}
+```
+
+## Poll Checkout Status
+
+`useCheckoutStatus` automatically polls at the interval returned by the API:
+
+```tsx
+import { useCheckoutStatus } from "@billing-io/react";
+
+function CheckoutTracker({ checkoutId }: { checkoutId: string }) {
+  const { data, loading } = useCheckoutStatus(checkoutId);
+
+  if (loading) return <p>Loading...</p>;
+
+  return (
+    <div>
+      <p>Status: {data.status}</p>
+      <p>
+        Confirmations: {data.confirmations}/{data.required_confirmations}
+      </p>
+    </div>
+  );
+}
+```
+
+## List Checkouts
+
+```tsx
+import { useCheckouts } from "@billing-io/react";
+
+function CheckoutList() {
+  const { data, loading, error } = useCheckouts({ limit: 10 });
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error.message}</p>;
+
+  return (
+    <ul>
+      {data.map((checkout) => (
+        <li key={checkout.checkout_id}>
+          {checkout.checkout_id} - {checkout.status}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## Access the SDK Client Directly
+
+Use `useBillingClient` for operations not covered by hooks:
+
+```tsx
+import { useBillingClient } from "@billing-io/react";
+
+function CustomComponent() {
+  const billing = useBillingClient();
+
+  const handleAction = async () => {
+    const invoice = await billing.invoices.create({
+      /* ... */
+    });
+  };
+
+  return <button onClick={handleAction}>Create Invoice</button>;
+}
+```
+
+## Available Hooks
+
+| Hook | Description |
+| ---- | ----------- |
+| `useCreateCheckout` | Create a new checkout with loading/error state |
+| `useCheckoutStatus` | Poll checkout status with auto-refresh |
+| `useCheckouts` | List checkouts with pagination |
+| `useWebhookEndpoints` | Manage webhook endpoints |
+| `useEvents` | List billing events |
+| `useBillingClient` | Access the raw SDK client |

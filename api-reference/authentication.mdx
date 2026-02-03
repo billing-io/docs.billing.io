@@ -1,0 +1,55 @@
+---
+title: "Authentication"
+---
+
+The billing.io API uses API keys to authenticate requests. Include your API key as a Bearer token in the `Authorization` header of every request.
+
+## API Keys
+
+Your API keys carry access to your organization's data, so keep them secure. Do not share your secret API key in publicly accessible areas such as client-side code, GitHub repositories, or public forums.
+
+| Environment | Key prefix    | Base URL                      |
+|-------------|---------------|-------------------------------|
+| Production  | `sk_live_`    | `https://api.billing.io/v1`   |
+| Sandbox     | `sk_test_`    | `https://api.billing.io/v1`   |
+
+Sandbox keys allow you to test your integration without processing real payments. All API functionality is available in both environments.
+
+## Making Authenticated Requests
+
+Include your API key in the `Authorization` header using the Bearer scheme:
+
+```bash
+curl https://api.billing.io/v1/checkouts \
+  -H "Authorization: Bearer sk_live_your_api_key_here" \
+  -H "Content-Type: application/json"
+```
+
+## Organization-Scoped Access
+
+API keys are scoped to your organization. All resources created with a key belong to that organization, and you can only access resources within your own organization. This means:
+
+- A key created for Organization A cannot read or modify resources belonging to Organization B.
+- All list endpoints return only resources belonging to the authenticated organization.
+- Creating a resource automatically associates it with the key's organization.
+
+## Error Responses
+
+If authentication fails, the API returns a `401 Unauthorized` response:
+
+```json
+{
+  "error": {
+    "type": "authentication_error",
+    "code": "api_key_invalid",
+    "message": "The API key provided is invalid.",
+    "param": null
+  }
+}
+```
+
+Common authentication errors include:
+
+- **Missing header** -- No `Authorization` header was provided.
+- **Invalid key** -- The API key does not exist or has been revoked.
+- **Wrong environment** -- Using a sandbox key against production resources or vice versa.

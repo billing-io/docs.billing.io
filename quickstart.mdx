@@ -1,0 +1,318 @@
+---
+title: "Quickstart"
+sidebarTitle: "Quickstart"
+description: "Accept your first crypto payment in under 5 minutes. Create a checkout, monitor it, and handle the webhook confirmation."
+---
+
+## Prerequisites
+
+Before you start, you need:
+
+1. A billing.io account -- [sign up at app.billing.io](https://app.billing.io)
+2. At least one **payment method** configured (chain + token + wallet address)
+3. Your **API key** from the dashboard (prefixed `sk_test_` for sandbox or `sk_live_` for production)
+
+<Info>
+  Use your `sk_test_` key to follow this guide in sandbox mode. You can simulate payments without real crypto.
+</Info>
+
+---
+
+<Steps>
+
+<Step title="Get your API keys">
+
+Navigate to the [Dashboard](https://app.billing.io/dashboard) and copy your secret API key. Sandbox keys are prefixed with `sk_test_` and production keys with `sk_live_`.
+
+```bash
+# Store your key as an environment variable
+export BILLING_API_KEY="sk_test_your_key_here"
+```
+
+<Warning>
+  Never expose your secret API key in client-side code or commit it to version control. Use environment variables or a secrets manager.
+</Warning>
+
+</Step>
+
+<Step title="Create your first checkout">
+
+Call the checkout endpoint to generate a deposit address. The customer will send crypto to this address.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/checkouts \
+  -H "Authorization: Bearer $BILLING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{
+    "amount_usd": 49.99,
+    "chain": "tron",
+    "token": "USDT",
+    "metadata": {
+      "order_id": "ord_12345",
+      "customer_email": "customer@example.com"
+    }
+  }'
+```
+
+```javascript Node.js
+const response = await fetch("https://api.billing.io/v1/checkouts", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${process.env.BILLING_API_KEY}`,
+    "Content-Type": "application/json",
+    "Idempotency-Key": crypto.randomUUID(),
+  },
+  body: JSON.stringify({
+    amount_usd: 49.99,
+    chain: "tron",
+    token: "USDT",
+    metadata: {
+      order_id: "ord_12345",
+      customer_email: "customer@example.com",
+    },
+  }),
+});
+
+const checkout = await response.json();
+console.log(checkout.deposit_address);
+// => "TXqH4j..."
+console.log(checkout.checkout_id);
+// => "co_a1b2c3d4e5f6..."
+```
+
+```python Python
+import requests
+import uuid
+
+response = requests.post(
+    "https://api.billing.io/v1/checkouts",
+    headers={
+        "Authorization": f"Bearer {BILLING_API_KEY}",
+        "Content-Type": "application/json",
+        "Idempotency-Key": str(uuid.uuid4()),
+    },
+    json={
+        "amount_usd": 49.99,
+        "chain": "tron",
+        "token": "USDT",
+        "metadata": {
+            "order_id": "ord_12345",
+            "customer_email": "customer@example.com",
+        },
+    },
+)
+
+checkout = response.json()
+print(checkout["deposit_address"])
+# => "TXqH4j..."
+```
+
+</CodeGroup>
+
+The response includes the deposit address and checkout details:
+
+```json
+{
+  "checkout_id": "co_a1b2c3d4e5f6a7b8c9d0e1f2",
+  "deposit_address": "TXqH4jB8nPz1rL9kVw2mYd6sQ5cFgA3hJe",
+  "chain": "tron",
+  "token": "USDT",
+  "amount_usd": 49.99,
+  "amount_atomic": "49990000",
+  "status": "pending",
+  "confirmations": 0,
+  "required_confirmations": 19,
+  "expires_at": "2025-01-15T12:30:00Z",
+  "created_at": "2025-01-15T12:00:00Z",
+  "metadata": {
+    "order_id": "ord_12345",
+    "customer_email": "customer@example.com"
+  }
+}
+```
+
+<Tip>
+  Use the `Idempotency-Key` header to safely retry requests. If a request with the same key was already processed, the original response is returned. Keys expire after 24 hours.
+</Tip>
+
+</Step>
+
+<Step title="Handle the webhook">
+
+When the payment is confirmed on-chain, billing.io sends a `checkout.completed` event to your registered webhook endpoint.
+
+First, register a webhook endpoint:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/webhooks \
+  -H "Authorization: Bearer $BILLING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-app.com/webhooks/billing",
+    "events": ["checkout.completed", "checkout.expired"]
+  }'
+```
+
+```javascript Node.js
+const webhook = await fetch("https://api.billing.io/v1/webhooks", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${process.env.BILLING_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    url: "https://your-app.com/webhooks/billing",
+    events: ["checkout.completed", "checkout.expired"],
+  }),
+});
+
+const { secret } = await webhook.json();
+// Store this secret securely -- you need it to verify signatures
+console.log(secret);
+// => "whsec_a1b2c3..."
+```
+
+</CodeGroup>
+
+<Warning>
+  The webhook signing secret (`whsec_` prefix) is only returned once at creation time. Store it securely -- you will need it to verify incoming webhook signatures.
+</Warning>
+
+Then handle incoming webhooks in your application:
+
+```javascript Node.js
+import crypto from "crypto";
+
+export async function POST(request) {
+  const body = await request.text();
+  const signature = request.headers.get("X-Billing-Signature");
+
+  // Parse the signature header
+  const parts = Object.fromEntries(
+    signature.split(",").map((p) => p.split("="))
+  );
+  const timestamp = parts.t;
+  const receivedHmac = parts.v1;
+
+  // Compute expected HMAC
+  const payload = `${timestamp}.${body}`;
+  const expectedHmac = crypto
+    .createHmac("sha256", process.env.WEBHOOK_SECRET)
+    .update(payload)
+    .digest("hex");
+
+  if (receivedHmac !== expectedHmac) {
+    return new Response("Invalid signature", { status: 401 });
+  }
+
+  // Process the event
+  const event = JSON.parse(body);
+
+  switch (event.type) {
+    case "checkout.completed":
+      const checkout = event.data;
+      console.log(`Payment confirmed: ${checkout.checkout_id}`);
+      console.log(`Amount: $${checkout.amount_usd}`);
+      console.log(`Tx: ${checkout.tx_hash}`);
+      // Fulfill the order in your system
+      break;
+
+    case "checkout.expired":
+      console.log(`Checkout expired: ${event.data.checkout_id}`);
+      // Mark the order as expired
+      break;
+  }
+
+  return new Response("OK", { status: 200 });
+}
+```
+
+A `checkout.completed` webhook payload looks like this:
+
+```json
+{
+  "event_id": "evt_f1e2d3c4b5a6f7e8d9c0b1a2",
+  "type": "checkout.completed",
+  "checkout_id": "co_a1b2c3d4e5f6a7b8c9d0e1f2",
+  "data": {
+    "checkout_id": "co_a1b2c3d4e5f6a7b8c9d0e1f2",
+    "deposit_address": "TXqH4jB8nPz1rL9kVw2mYd6sQ5cFgA3hJe",
+    "chain": "tron",
+    "token": "USDT",
+    "amount_usd": 49.99,
+    "amount_atomic": "49990000",
+    "status": "confirmed",
+    "tx_hash": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd",
+    "confirmations": 19,
+    "required_confirmations": 19,
+    "confirmed_at": "2025-01-15T12:05:30Z",
+    "metadata": {
+      "order_id": "ord_12345",
+      "customer_email": "customer@example.com"
+    }
+  },
+  "created_at": "2025-01-15T12:05:31Z"
+}
+```
+
+</Step>
+
+</Steps>
+
+---
+
+## Polling as a fallback
+
+If you prefer polling over webhooks (or want a fallback), use the lightweight status endpoint:
+
+```bash
+curl https://api.billing.io/v1/checkouts/co_a1b2c3d4e5f6a7b8c9d0e1f2/status \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+The response includes a `polling_interval_ms` hint telling you how often to poll:
+
+```json
+{
+  "checkout_id": "co_a1b2c3d4e5f6a7b8c9d0e1f2",
+  "status": "confirming",
+  "tx_hash": "a1b2c3...",
+  "confirmations": 12,
+  "required_confirmations": 19,
+  "polling_interval_ms": 2000
+}
+```
+
+---
+
+## Test in sandbox
+
+Use your `sk_test_` API key and the sandbox environment to test the full flow without real crypto. You can simulate payment confirmations from the [Sandbox page](https://app.billing.io/dashboard/sandbox) in the dashboard.
+
+<Card title="Sandbox Testing Guide" icon="flask-vial" href="/guides/sandbox-testing">
+  Learn how to simulate payments, test webhooks, and validate your integration in sandbox mode.
+</Card>
+
+---
+
+## What's next?
+
+<CardGroup cols={2}>
+  <Card title="Accept Payments" icon="credit-card" href="/guides/accept-payments">
+    Full guide to payment methods, checkouts, and payment links.
+  </Card>
+  <Card title="Subscription Billing" icon="repeat" href="/guides/subscription-billing">
+    Set up recurring billing with plans, trials, and renewals.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Deep dive into webhook setup, signature verification, and retry behavior.
+  </Card>
+  <Card title="Idempotency" icon="shield-check" href="/guides/idempotency">
+    Safely retry requests and prevent duplicate operations.
+  </Card>
+</CardGroup>

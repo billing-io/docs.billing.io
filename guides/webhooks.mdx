@@ -1,0 +1,626 @@
+---
+title: "Webhooks"
+description: "Receive real-time event notifications"
+---
+
+## Overview
+
+Webhooks let billing.io push events to your server in real time. Instead of polling the API, you register an HTTPS endpoint and billing.io sends a POST request whenever something happens -- a checkout is confirmed, a subscription renews, a payout settles, and so on.
+
+Every webhook delivery is signed with HMAC-SHA256 so you can verify it came from billing.io.
+
+<Info>
+  **Prerequisites** -- Webhooks require the **Starter** plan or above. You need
+  a publicly accessible HTTPS endpoint to receive events.
+</Info>
+
+---
+
+## Setting Up a Webhook Endpoint
+
+Register your endpoint by specifying the URL and which events you want to receive.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/webhooks \
+  -H "Authorization: Bearer sk_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/webhooks/billing",
+    "events": [
+      "checkout.created",
+      "checkout.completed",
+      "checkout.expired",
+      "checkout.failed"
+    ],
+    "description": "Production checkout events"
+  }'
+```
+
+```javascript Node.js
+const response = await fetch("https://api.billing.io/v1/webhooks", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer sk_live_xxx",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    url: "https://example.com/webhooks/billing",
+    events: [
+      "checkout.created",
+      "checkout.completed",
+      "checkout.expired",
+      "checkout.failed",
+    ],
+    description: "Production checkout events",
+  }),
+});
+
+const webhook = await response.json();
+
+// IMPORTANT: Store the secret securely -- it is only returned on creation
+console.log(webhook.webhook_id); // "we_..."
+console.log(webhook.secret);     // "whsec_..."
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "https://api.billing.io/v1/webhooks",
+    headers={
+        "Authorization": "Bearer sk_live_xxx",
+        "Content-Type": "application/json",
+    },
+    json={
+        "url": "https://example.com/webhooks/billing",
+        "events": [
+            "checkout.created",
+            "checkout.completed",
+            "checkout.expired",
+            "checkout.failed",
+        ],
+        "description": "Production checkout events",
+    },
+)
+
+webhook = response.json()
+
+# IMPORTANT: Store the secret securely -- it is only returned on creation
+print(webhook["webhook_id"])  # "we_..."
+print(webhook["secret"])      # "whsec_..."
+```
+
+</CodeGroup>
+
+Response:
+
+```json
+{
+  "webhook_id": "we_f6a7b8c9d0e1f2a3",
+  "url": "https://example.com/webhooks/billing",
+  "events": [
+    "checkout.created",
+    "checkout.completed",
+    "checkout.expired",
+    "checkout.failed"
+  ],
+  "secret": "whsec_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+  "description": "Production checkout events",
+  "status": "active",
+  "created_at": "2025-06-15T10:00:00Z"
+}
+```
+
+<Warning>
+  The `secret` field is **only returned once** when the webhook endpoint is
+  created. Store it securely in your environment variables. You will need it
+  to verify webhook signatures.
+</Warning>
+
+---
+
+## Supported Event Types
+
+### Checkout events
+
+| Event | Description |
+|-------|-------------|
+| `checkout.created` | A new checkout was created |
+| `checkout.payment_detected` | An on-chain transaction was detected (unconfirmed) |
+| `checkout.confirming` | Block confirmations are in progress |
+| `checkout.completed` | Payment is fully confirmed (terminal) |
+| `checkout.expired` | Checkout expired without payment (terminal) |
+| `checkout.failed` | Unrecoverable error (terminal) |
+
+### Subscription events
+
+| Event | Description |
+|-------|-------------|
+| `subscription.renewed` | Subscription period was successfully renewed |
+| `subscription.past_due` | Payment failed after retries, subscription is past due |
+| `subscription.paused` | Subscription was paused |
+| `subscription.canceled` | Subscription was canceled |
+
+### Payout events
+
+| Event | Description |
+|-------|-------------|
+| `payout.settled` | Payout was verified and settled on-chain |
+| `payout.failed` | Payout verification failed |
+
+---
+
+## Webhook Payload Format
+
+Every webhook delivery is an HTTP POST with a JSON body:
+
+```json
+{
+  "event_id": "evt_7f8a9b0c1d2e3f4a",
+  "type": "checkout.completed",
+  "checkout_id": "co_9a8b7c6d5e4f",
+  "data": {
+    "checkout_id": "co_9a8b7c6d5e4f",
+    "deposit_address": "TXrkA1b2C3d4E5f6G7h8I9j0K1l2M3n4",
+    "chain": "tron",
+    "token": "USDT",
+    "amount_usd": 49.99,
+    "amount_atomic": "49990000",
+    "status": "confirmed",
+    "tx_hash": "abc123def456...",
+    "confirmations": 19,
+    "required_confirmations": 19,
+    "expires_at": "2025-06-15T11:00:00Z",
+    "detected_at": "2025-06-15T10:35:00Z",
+    "confirmed_at": "2025-06-15T10:42:00Z",
+    "created_at": "2025-06-15T10:30:00Z",
+    "metadata": {
+      "order_id": "ord_12345"
+    }
+  },
+  "created_at": "2025-06-15T10:42:00Z"
+}
+```
+
+---
+
+## Signature Verification
+
+Every webhook delivery includes an `X-Billing-Signature` header. You **must** verify this signature to confirm the request came from billing.io and was not tampered with.
+
+### Signature format
+
+The `X-Billing-Signature` header has this format:
+
+```
+t={unix_timestamp},v1={hex_hmac_sha256}
+```
+
+Example:
+
+```
+t=1718451600,v1=5a2f3c4d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b
+```
+
+### Signed payload
+
+The HMAC-SHA256 is computed over the following string:
+
+```
+{timestamp}.{raw_request_body}
+```
+
+Where:
+- `{timestamp}` is the `t` value from the header
+- `{raw_request_body}` is the exact raw body of the HTTP request (not parsed JSON)
+
+### Verification code
+
+<CodeGroup>
+
+```javascript Node.js
+const crypto = require("crypto");
+
+function verifyWebhookSignature(rawBody, signatureHeader, secret) {
+  // 1. Parse the signature header
+  const parts = {};
+  for (const part of signatureHeader.split(",")) {
+    const [key, value] = part.split("=", 2);
+    parts[key] = value;
+  }
+
+  const timestamp = parts["t"];
+  const receivedSignature = parts["v1"];
+
+  if (!timestamp || !receivedSignature) {
+    throw new Error("Invalid signature header format");
+  }
+
+  // 2. Reject old timestamps (prevent replay attacks)
+  const tolerance = 5 * 60; // 5 minutes
+  const currentTime = Math.floor(Date.now() / 1000);
+  if (Math.abs(currentTime - parseInt(timestamp)) > tolerance) {
+    throw new Error("Timestamp outside tolerance window");
+  }
+
+  // 3. Compute the expected signature
+  const signedPayload = `${timestamp}.${rawBody}`;
+  const expectedSignature = crypto
+    .createHmac("sha256", secret)
+    .update(signedPayload)
+    .digest("hex");
+
+  // 4. Compare using constant-time comparison
+  const isValid = crypto.timingSafeEqual(
+    Buffer.from(receivedSignature, "hex"),
+    Buffer.from(expectedSignature, "hex")
+  );
+
+  if (!isValid) {
+    throw new Error("Invalid webhook signature");
+  }
+
+  return true;
+}
+
+// Express middleware example
+app.post("/webhooks/billing", express.raw({ type: "application/json" }), (req, res) => {
+  const signature = req.headers["x-billing-signature"];
+  const rawBody = req.body.toString();
+
+  try {
+    verifyWebhookSignature(rawBody, signature, process.env.WEBHOOK_SECRET);
+  } catch (err) {
+    console.error("Webhook verification failed:", err.message);
+    return res.status(400).json({ error: "Invalid signature" });
+  }
+
+  const event = JSON.parse(rawBody);
+  // Process the event...
+
+  res.status(200).json({ received: true });
+});
+```
+
+```python Python
+import hmac
+import hashlib
+import time
+
+def verify_webhook_signature(raw_body: bytes, signature_header: str, secret: str) -> bool:
+    """Verify a billing.io webhook signature."""
+    # 1. Parse the signature header
+    parts = {}
+    for part in signature_header.split(","):
+        key, value = part.split("=", 1)
+        parts[key] = value
+
+    timestamp = parts.get("t")
+    received_signature = parts.get("v1")
+
+    if not timestamp or not received_signature:
+        raise ValueError("Invalid signature header format")
+
+    # 2. Reject old timestamps (prevent replay attacks)
+    tolerance = 5 * 60  # 5 minutes
+    current_time = int(time.time())
+    if abs(current_time - int(timestamp)) > tolerance:
+        raise ValueError("Timestamp outside tolerance window")
+
+    # 3. Compute the expected signature
+    signed_payload = f"{timestamp}.{raw_body.decode('utf-8')}"
+    expected_signature = hmac.new(
+        secret.encode("utf-8"),
+        signed_payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+    # 4. Compare using constant-time comparison
+    if not hmac.compare_digest(received_signature, expected_signature):
+        raise ValueError("Invalid webhook signature")
+
+    return True
+
+
+# Flask example
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route("/webhooks/billing", methods=["POST"])
+def handle_webhook():
+    signature = request.headers.get("X-Billing-Signature", "")
+    raw_body = request.get_data()
+
+    try:
+        verify_webhook_signature(raw_body, signature, WEBHOOK_SECRET)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    event = request.get_json()
+    # Process the event...
+
+    return jsonify({"received": True}), 200
+```
+
+```go Go
+package billing
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+	"time"
+)
+
+func VerifyWebhookSignature(rawBody []byte, signatureHeader string, secret string) error {
+	// 1. Parse the signature header
+	parts := make(map[string]string)
+	for _, part := range strings.Split(signatureHeader, ",") {
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) == 2 {
+			parts[kv[0]] = kv[1]
+		}
+	}
+
+	timestamp, ok := parts["t"]
+	if !ok {
+		return errors.New("missing timestamp in signature header")
+	}
+
+	receivedSignature, ok := parts["v1"]
+	if !ok {
+		return errors.New("missing signature in signature header")
+	}
+
+	// 2. Reject old timestamps (prevent replay attacks)
+	ts, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid timestamp: %w", err)
+	}
+
+	tolerance := int64(5 * 60) // 5 minutes
+	currentTime := time.Now().Unix()
+	if math.Abs(float64(currentTime-ts)) > float64(tolerance) {
+		return errors.New("timestamp outside tolerance window")
+	}
+
+	// 3. Compute the expected signature
+	signedPayload := fmt.Sprintf("%s.%s", timestamp, string(rawBody))
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(signedPayload))
+	expectedSignature := hex.EncodeToString(mac.Sum(nil))
+
+	// 4. Compare using constant-time comparison
+	if !hmac.Equal([]byte(receivedSignature), []byte(expectedSignature)) {
+		return errors.New("invalid webhook signature")
+	}
+
+	return nil
+}
+```
+
+</CodeGroup>
+
+<Warning>
+  **Always verify signatures.** Without verification, an attacker could send
+  fake events to your webhook endpoint. Use constant-time comparison functions
+  to prevent timing attacks.
+</Warning>
+
+---
+
+## Retry Policy
+
+If your endpoint does not respond with a `2xx` status code, billing.io retries the delivery with exponential backoff:
+
+| Attempt | Timing | Delay after previous |
+|---------|--------|---------------------|
+| 1 | Immediate | -- |
+| 2 | 5 minutes later | 5 min |
+| 3 | 30 minutes later | 25 min |
+
+After **3 failed attempts**, the delivery is marked as failed. You can find failed deliveries in the event log at **Developers > Event Log** in the dashboard, or by querying the `GET /events` endpoint.
+
+<Note>
+  Each retry uses the **same event payload and event_id**. Your endpoint should
+  handle duplicate deliveries idempotently. See the best practices below.
+</Note>
+
+---
+
+## Best Practices
+
+### 1. Respond with 2xx quickly
+
+Return a `200` or `202` status code as fast as possible. Do your heavy processing (database writes, email sends, fulfillment) asynchronously after responding.
+
+<CodeGroup>
+
+```javascript Node.js
+app.post("/webhooks/billing", express.raw({ type: "application/json" }), (req, res) => {
+  // Verify signature first
+  verifyWebhookSignature(req.body.toString(), req.headers["x-billing-signature"], secret);
+
+  // Respond immediately
+  res.status(200).json({ received: true });
+
+  // Process asynchronously
+  const event = JSON.parse(req.body.toString());
+  processEventAsync(event).catch(console.error);
+});
+```
+
+```python Python
+@app.route("/webhooks/billing", methods=["POST"])
+def handle_webhook():
+    verify_webhook_signature(request.get_data(), request.headers["X-Billing-Signature"], secret)
+
+    event = request.get_json()
+
+    # Queue for async processing
+    task_queue.enqueue(process_event, event)
+
+    # Respond immediately
+    return jsonify({"received": True}), 200
+```
+
+</CodeGroup>
+
+### 2. Handle duplicates idempotently
+
+Due to retries and at-least-once delivery, your endpoint may receive the same event more than once. Use the `event_id` to deduplicate:
+
+```javascript
+const processedEvents = new Set(); // Use a database in production
+
+app.post("/webhooks/billing", handler, async (req, res) => {
+  const event = JSON.parse(req.body.toString());
+
+  // Check if already processed
+  if (processedEvents.has(event.event_id)) {
+    return res.status(200).json({ received: true, duplicate: true });
+  }
+
+  // Process the event
+  await processEvent(event);
+
+  // Mark as processed
+  processedEvents.add(event.event_id);
+
+  res.status(200).json({ received: true });
+});
+```
+
+<Tip>
+  In production, store processed event IDs in a database or Redis rather than
+  in-memory. Use a TTL of at least 24 hours for the deduplication cache.
+</Tip>
+
+### 3. Verify the signature before processing
+
+Always verify the `X-Billing-Signature` header before trusting the payload. Reject requests with invalid or missing signatures.
+
+### 4. Protect against replay attacks
+
+Check the timestamp in the signature header. Reject events older than 5 minutes to prevent replay attacks. The verification code examples above include this check.
+
+### 5. Use HTTPS endpoints only
+
+Webhook URLs must use HTTPS. billing.io does not send events to HTTP endpoints in production (sandbox allows HTTP for local development).
+
+### 6. Log failed deliveries
+
+Monitor your webhook endpoint's success rate. Check the **Developers > Event Log** page in the dashboard to see delivery attempts and failures.
+
+---
+
+## Testing Webhooks in Sandbox
+
+When using sandbox API keys (`sk_test_`), you can test webhook deliveries without real on-chain transactions.
+
+### 1. Use a tunnel for local development
+
+Use a tunneling service to expose your local server:
+
+```bash
+# Using ngrok
+ngrok http 3000
+
+# Register the ngrok URL as a webhook endpoint
+curl -X POST https://api.billing.io/v1/webhooks \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://abc123.ngrok.io/webhooks/billing",
+    "events": ["checkout.completed"],
+    "description": "Local development"
+  }'
+```
+
+### 2. Simulate a payment
+
+Use the sandbox simulation endpoint to trigger a `checkout.completed` event:
+
+```bash
+# First create a checkout
+curl -X POST https://api.billing.io/v1/checkouts \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount_usd": 10.00,
+    "chain": "tron",
+    "token": "USDT"
+  }'
+
+# Then simulate the payment confirmation
+curl -X POST https://api.billing.io/v1/sandbox/simulate-payment \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkout_id": "co_abc123"
+  }'
+```
+
+This triggers the full webhook delivery flow to your registered endpoint.
+
+See the [Sandbox Testing](/guides/sandbox-testing) guide for more details on testing.
+
+---
+
+## Managing Webhook Endpoints
+
+### List endpoints
+
+```bash
+curl https://api.billing.io/v1/webhooks \
+  -H "Authorization: Bearer sk_live_xxx"
+```
+
+### Get endpoint details
+
+```bash
+curl https://api.billing.io/v1/webhooks/we_f6a7b8c9d0e1f2a3 \
+  -H "Authorization: Bearer sk_live_xxx"
+```
+
+### Delete an endpoint
+
+```bash
+curl -X DELETE https://api.billing.io/v1/webhooks/we_f6a7b8c9d0e1f2a3 \
+  -H "Authorization: Bearer sk_live_xxx"
+```
+
+### Query event history
+
+Use the events endpoint to review past events and debug delivery issues:
+
+```bash
+# List all events
+curl "https://api.billing.io/v1/events?limit=10" \
+  -H "Authorization: Bearer sk_live_xxx"
+
+# Filter by event type
+curl "https://api.billing.io/v1/events?type=checkout.completed&limit=10" \
+  -H "Authorization: Bearer sk_live_xxx"
+
+# Filter by checkout
+curl "https://api.billing.io/v1/events?checkout_id=co_9a8b7c6d5e4f" \
+  -H "Authorization: Bearer sk_live_xxx"
+```
+
+---
+
+## Next Steps
+
+- [Accept payments](/guides/accept-payments) and handle checkout webhooks
+- [Set up subscriptions](/guides/subscription-billing) and handle renewal events
+- [Orchestrate payouts](/guides/payout-orchestration) and handle settlement events
+- [Test in sandbox](/guides/sandbox-testing) to validate your webhook handler

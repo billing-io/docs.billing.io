@@ -1,0 +1,78 @@
+---
+title: "Pagination"
+---
+
+The billing.io API uses pagination to limit the number of results returned per request. Most list endpoints support pagination parameters to let you navigate through large datasets.
+
+## Cursor-Based Pagination
+
+Most list endpoints use cursor-based pagination. This provides stable, consistent results even when new items are being created.
+
+### Parameters
+
+| Parameter | Type    | Default | Description                                                 |
+|-----------|---------|---------|-------------------------------------------------------------|
+| `cursor`  | string  | --      | Opaque cursor from a previous response. Omit for the first page. |
+| `limit`   | integer | 25      | Number of items per page. Minimum 1, maximum 100.           |
+
+### Response Fields
+
+| Field         | Type           | Description                                                    |
+|---------------|----------------|----------------------------------------------------------------|
+| `data`        | array          | The list of items for the current page.                        |
+| `has_more`    | boolean        | Whether there are more items after this page.                  |
+| `next_cursor` | string or null | The cursor to use for the next page. Null if no more results.  |
+
+### Example
+
+Request the first page:
+
+```bash
+curl https://api.billing.io/v1/checkouts?limit=10 \
+  -H "Authorization: Bearer sk_live_your_api_key_here"
+```
+
+Response:
+
+```json
+{
+  "data": [
+    { "checkout_id": "co_abc123", "status": "confirmed", "..." : "..." },
+    { "checkout_id": "co_def456", "status": "pending", "..." : "..." }
+  ],
+  "has_more": true,
+  "next_cursor": "eyJpZCI6ImNvX2RlZjQ1NiJ9"
+}
+```
+
+Request the next page using the cursor:
+
+```bash
+curl "https://api.billing.io/v1/checkouts?limit=10&cursor=eyJpZCI6ImNvX2RlZjQ1NiJ9" \
+  -H "Authorization: Bearer sk_live_your_api_key_here"
+```
+
+## Offset-Based Pagination
+
+Some endpoints (such as List Customers) use offset-based pagination instead of cursor-based pagination.
+
+### Parameters
+
+| Parameter | Type    | Default | Description                                      |
+|-----------|---------|---------|--------------------------------------------------|
+| `offset`  | integer | 0       | Number of items to skip before returning results. |
+| `limit`   | integer | 25      | Number of items per page. Minimum 1, maximum 100. |
+
+### Example
+
+```bash
+curl "https://api.billing.io/v1/customers?limit=20&offset=40" \
+  -H "Authorization: Bearer sk_live_your_api_key_here"
+```
+
+## Best Practices
+
+- Always check the `has_more` field to determine if additional pages exist.
+- Use the `next_cursor` value exactly as returned -- do not modify or construct cursor values.
+- For cursor-based pagination, results are ordered newest first by default.
+- If you need all results, loop until `has_more` is `false`.

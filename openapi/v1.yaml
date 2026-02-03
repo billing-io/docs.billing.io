@@ -1,0 +1,3102 @@
+openapi: 3.0.3
+info:
+  title: billing.io API
+  description: |
+    Non-custodial crypto checkout API. Create payment checkouts, monitor status
+    via polling or webhooks, and manage webhook endpoints.
+
+    ## Authentication
+    All endpoints (except health) require a Bearer token in the `Authorization` header.
+    Keys are prefixed `sk_live_` (production) or `sk_test_` (sandbox).
+
+    ## Webhooks
+    Events are signed with HMAC-SHA256. The `X-Billing-Signature` header contains:
+    `t={unix_timestamp},v1={hex_hmac_sha256}`
+
+    Signed payload: `{timestamp}.{raw_body}`
+
+    Retry policy: 3 attempts with exponential backoff (immediate, 5 min, 30 min).
+  version: 1.0.0
+  contact:
+    name: billing.io Support
+  license:
+    name: Proprietary
+    url: https://billing.io/terms
+
+servers:
+  - url: https://api.billing.io/v1
+    description: Production
+  - url: http://localhost:8080/v1
+    description: Local development
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Checkouts
+    description: Create and monitor crypto payment checkouts
+  - name: Webhooks
+    description: Register endpoints to receive event notifications
+  - name: Events
+    description: Query event history
+  - name: Health
+    description: Service health
+  - name: Customers
+    description: Manage customers and their metadata
+  - name: Payment Methods
+    description: Configure accepted payment methods (chain + token pairs)
+  - name: Payment Links
+    description: Create shareable payment links
+  - name: Subscriptions
+    description: Recurring billing with plans, subscriptions, renewals, and entitlements
+  - name: Payouts
+    description: Manage outbound payouts, settlements, and reconciliation
+  - name: Revenue
+    description: Revenue events, accounting periods, and adjustments
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [Health]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /checkouts:
+    post:
+      operationId: createCheckout
+      tags: [Checkouts]
+      summary: Create a checkout
+      description: |
+        Creates a new payment checkout and returns a deposit address.
+        Supports idempotency via the `Idempotency-Key` header.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCheckoutRequest"
+      responses:
+        "201":
+          description: Checkout created
+          headers:
+            Idempotency-Key:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Checkout"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/IdempotencyConflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    get:
+      operationId: listCheckouts
+      tags: [Checkouts]
+      summary: List checkouts
+      description: Returns a paginated list of checkouts, newest first.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CheckoutStatus"
+      responses:
+        "200":
+          description: Checkout list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /checkouts/{checkout_id}:
+    get:
+      operationId: getCheckout
+      tags: [Checkouts]
+      summary: Get a checkout
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200":
+          description: Checkout details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Checkout"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /checkouts/{checkout_id}/status:
+    get:
+      operationId: getCheckoutStatus
+      tags: [Checkouts]
+      summary: Get checkout status
+      description: |
+        Lightweight status endpoint for polling. Returns current status,
+        confirmations, and polling hints.
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200":
+          description: Checkout status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutStatusResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /webhooks:
+    post:
+      operationId: createWebhookEndpoint
+      tags: [Webhooks]
+      summary: Create a webhook endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWebhookRequest"
+      responses:
+        "201":
+          description: Webhook endpoint created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEndpoint"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    get:
+      operationId: listWebhookEndpoints
+      tags: [Webhooks]
+      summary: List webhook endpoints
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Webhook endpoint list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEndpointList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /webhooks/{webhook_id}:
+    get:
+      operationId: getWebhookEndpoint
+      tags: [Webhooks]
+      summary: Get a webhook endpoint
+      parameters:
+        - $ref: "#/components/parameters/WebhookId"
+      responses:
+        "200":
+          description: Webhook endpoint details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEndpoint"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    delete:
+      operationId: deleteWebhookEndpoint
+      tags: [Webhooks]
+      summary: Delete a webhook endpoint
+      parameters:
+        - $ref: "#/components/parameters/WebhookId"
+      responses:
+        "204":
+          description: Webhook endpoint deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /events:
+    get:
+      operationId: listEvents
+      tags: [Events]
+      summary: List events
+      description: |
+        Returns a paginated list of webhook events, newest first.
+        Useful for replaying missed webhooks or debugging.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/EventType"
+        - name: checkout_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Event list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /events/{event_id}:
+    get:
+      operationId: getEvent
+      tags: [Events]
+      summary: Get an event
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Event details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Customers ───────────────────────────────────────────────────────────────
+
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [Customers]
+      summary: List customers
+      description: Returns a paginated list of customers, newest first.
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search by email, name, or external_id
+        - $ref: "#/components/parameters/Limit"
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of items to skip for pagination
+      responses:
+        "200":
+          description: Customer list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    post:
+      operationId: createCustomer
+      tags: [Customers]
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /customers/{customer_id}:
+    get:
+      operationId: getCustomer
+      tags: [Customers]
+      summary: Get a customer
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      responses:
+        "200":
+          description: Customer details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    patch:
+      operationId: updateCustomer
+      tags: [Customers]
+      summary: Update a customer
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomerRequest"
+      responses:
+        "200":
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Payment Methods ─────────────────────────────────────────────────────────
+
+  /payment-methods:
+    get:
+      operationId: listPaymentMethods
+      tags: [Payment Methods]
+      summary: List payment methods
+      description: Returns a list of configured payment methods for the organization.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/PaymentMethodStatus"
+      responses:
+        "200":
+          description: Payment method list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentMethodList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    post:
+      operationId: createPaymentMethod
+      tags: [Payment Methods]
+      summary: Create a payment method
+      description: Registers a new payment method (chain + token pair) for the organization.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentMethodRequest"
+      responses:
+        "201":
+          description: Payment method created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentMethod"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /payment-methods/{id}:
+    patch:
+      operationId: updatePaymentMethod
+      tags: [Payment Methods]
+      summary: Update a payment method
+      parameters:
+        - $ref: "#/components/parameters/PaymentMethodId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePaymentMethodRequest"
+      responses:
+        "200":
+          description: Payment method updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentMethod"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    delete:
+      operationId: disablePaymentMethod
+      tags: [Payment Methods]
+      summary: Disable a payment method
+      description: Sets the payment method status to disabled. Cannot be undone.
+      parameters:
+        - $ref: "#/components/parameters/PaymentMethodId"
+      responses:
+        "204":
+          description: Payment method disabled
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /payment-methods/{id}/default:
+    post:
+      operationId: setDefaultPaymentMethod
+      tags: [Payment Methods]
+      summary: Set as default payment method
+      description: Sets this payment method as the default for the organization.
+      parameters:
+        - $ref: "#/components/parameters/PaymentMethodId"
+      responses:
+        "200":
+          description: Payment method set as default
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentMethod"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Payment Links ───────────────────────────────────────────────────────────
+
+  /payment-links:
+    get:
+      operationId: listPaymentLinks
+      tags: [Payment Links]
+      summary: List payment links
+      description: Returns a list of payment links, newest first.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Payment link list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentLinkList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    post:
+      operationId: createPaymentLink
+      tags: [Payment Links]
+      summary: Create a payment link
+      description: Creates a shareable payment link that generates a checkout on visit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentLinkRequest"
+      responses:
+        "201":
+          description: Payment link created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentLink"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Subscription Plans ──────────────────────────────────────────────────────
+
+  /subscriptions/plans:
+    get:
+      operationId: listSubscriptionPlans
+      tags: [Subscriptions]
+      summary: List subscription plans
+      description: Returns a list of subscription plans.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/SubscriptionPlanStatus"
+      responses:
+        "200":
+          description: Subscription plan list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPlanList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    post:
+      operationId: createSubscriptionPlan
+      tags: [Subscriptions]
+      summary: Create a subscription plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubscriptionPlanRequest"
+      responses:
+        "201":
+          description: Subscription plan created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPlan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /subscriptions/plans/{id}:
+    patch:
+      operationId: updateSubscriptionPlan
+      tags: [Subscriptions]
+      summary: Update or archive a subscription plan
+      parameters:
+        - $ref: "#/components/parameters/PlanId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSubscriptionPlanRequest"
+      responses:
+        "200":
+          description: Subscription plan updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPlan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Subscriptions ───────────────────────────────────────────────────────────
+
+  /subscriptions:
+    get:
+      operationId: listSubscriptions
+      tags: [Subscriptions]
+      summary: List subscriptions
+      description: Returns a paginated list of subscriptions, newest first.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/SubscriptionStatus"
+        - name: customer_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by customer identifier
+      responses:
+        "200":
+          description: Subscription list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    post:
+      operationId: createSubscription
+      tags: [Subscriptions]
+      summary: Create a subscription
+      description: Subscribes a customer to a plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubscriptionRequest"
+      responses:
+        "201":
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /subscriptions/{id}:
+    patch:
+      operationId: updateSubscription
+      tags: [Subscriptions]
+      summary: Cancel, pause, or resume a subscription
+      description: |
+        Perform a lifecycle action on a subscription.
+        - `cancel` cancels at end of current period
+        - `cancel_immediately` cancels immediately
+        - `pause` pauses the subscription
+        - `resume` resumes a paused subscription
+      parameters:
+        - $ref: "#/components/parameters/SubscriptionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSubscriptionRequest"
+      responses:
+        "200":
+          description: Subscription updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Subscription Renewals ───────────────────────────────────────────────────
+
+  /subscriptions/renewals:
+    get:
+      operationId: listRenewals
+      tags: [Subscriptions]
+      summary: List renewals
+      description: Returns a paginated list of subscription renewals.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/RenewalStatus"
+        - name: subscription_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by subscription identifier
+      responses:
+        "200":
+          description: Renewal list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionRenewalList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /subscriptions/renewals/{id}/retry:
+    post:
+      operationId: retryRenewal
+      tags: [Subscriptions]
+      summary: Retry a failed renewal
+      description: Retries a failed renewal by creating a new checkout.
+      parameters:
+        - $ref: "#/components/parameters/RenewalId"
+      responses:
+        "200":
+          description: Renewal retried
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionRenewal"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Subscription Entitlements ───────────────────────────────────────────────
+
+  /subscriptions/entitlements:
+    get:
+      operationId: listEntitlements
+      tags: [Subscriptions]
+      summary: List entitlements
+      description: Returns entitlements for a plan. The `plan_id` query parameter is required.
+      parameters:
+        - name: plan_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The plan identifier (required)
+      responses:
+        "200":
+          description: Entitlement list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    post:
+      operationId: createEntitlement
+      tags: [Subscriptions]
+      summary: Create an entitlement
+      description: Attaches a feature entitlement to a subscription plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEntitlementRequest"
+      responses:
+        "201":
+          description: Entitlement created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entitlement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /subscriptions/entitlements/{id}:
+    patch:
+      operationId: updateEntitlement
+      tags: [Subscriptions]
+      summary: Update an entitlement
+      parameters:
+        - $ref: "#/components/parameters/EntitlementId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEntitlementRequest"
+      responses:
+        "200":
+          description: Entitlement updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entitlement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    delete:
+      operationId: deleteEntitlement
+      tags: [Subscriptions]
+      summary: Remove an entitlement
+      parameters:
+        - $ref: "#/components/parameters/EntitlementId"
+      responses:
+        "204":
+          description: Entitlement removed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /subscriptions/entitlements/check:
+    get:
+      operationId: checkEntitlement
+      tags: [Subscriptions]
+      summary: Check an entitlement
+      description: |
+        Checks whether a customer has access to a specific feature based on
+        their active subscription plan's entitlements.
+      parameters:
+        - name: customer_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The customer identifier
+        - name: feature_key
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The feature key to check
+      responses:
+        "200":
+          description: Entitlement check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementCheckResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Payouts ─────────────────────────────────────────────────────────────────
+
+  /payouts:
+    get:
+      operationId: listPayoutIntents
+      tags: [Payouts]
+      summary: List payout intents
+      description: Returns a paginated list of payout intents.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/PayoutIntentStatus"
+        - name: due_date_before
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Filter payouts due before this date
+        - name: due_date_after
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Filter payouts due after this date
+      responses:
+        "200":
+          description: Payout intent list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutIntentList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    post:
+      operationId: createPayoutIntent
+      tags: [Payouts]
+      summary: Create a payout intent
+      description: Creates a new outbound payout intent in draft status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePayoutIntentRequest"
+      responses:
+        "201":
+          description: Payout intent created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutIntent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /payouts/{id}:
+    patch:
+      operationId: updatePayoutIntent
+      tags: [Payouts]
+      summary: Update, approve, or cancel a payout intent
+      description: |
+        Updates a payout intent. Can be used to approve or cancel drafts,
+        or update mutable fields while in draft status.
+      parameters:
+        - $ref: "#/components/parameters/PayoutIntentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePayoutIntentRequest"
+      responses:
+        "200":
+          description: Payout intent updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutIntent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /payouts/{id}/execute:
+    post:
+      operationId: executePayoutIntent
+      tags: [Payouts]
+      summary: Submit transaction hash for a payout
+      description: Submits the on-chain transaction hash after executing the payout.
+      parameters:
+        - $ref: "#/components/parameters/PayoutIntentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExecutePayoutRequest"
+      responses:
+        "200":
+          description: Payout execution submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutIntent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /payouts/settlements:
+    get:
+      operationId: listSettlements
+      tags: [Payouts]
+      summary: List settlements
+      description: Returns a paginated list of on-chain settlement records.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: payout_intent_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by payout intent identifier
+        - name: chain
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Chain"
+      responses:
+        "200":
+          description: Settlement list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /payouts/reconciliation:
+    get:
+      operationId: getReconciliationSummary
+      tags: [Payouts]
+      summary: Reconciliation summary
+      description: |
+        Returns a summary comparing payout intents against on-chain settlements,
+        including matched, unmatched, and discrepancy details.
+      responses:
+        "200":
+          description: Reconciliation summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconciliationSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Revenue ─────────────────────────────────────────────────────────────────
+
+  /revenue/events:
+    get:
+      operationId: listRevenueEvents
+      tags: [Revenue]
+      summary: List revenue events
+      description: Returns a paginated list of revenue events.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: event_type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/RevenueEventType"
+        - name: date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Filter events from this date
+        - name: date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Filter events up to this date
+      responses:
+        "200":
+          description: Revenue event list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevenueEventList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /revenue/accounting:
+    get:
+      operationId: listAccountingPeriods
+      tags: [Revenue]
+      summary: Accounting periods
+      description: Returns revenue accounting periods with gross, net, and adjustment breakdowns.
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [monthly, weekly]
+            default: monthly
+          description: Aggregation period
+      responses:
+        "200":
+          description: Accounting period list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountingPeriodList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /revenue/adjustments:
+    get:
+      operationId: listAdjustments
+      tags: [Revenue]
+      summary: List adjustments
+      description: Returns a paginated list of revenue adjustments.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/AdjustmentType"
+      responses:
+        "200":
+          description: Adjustment list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdjustmentList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    post:
+      operationId: createAdjustment
+      tags: [Revenue]
+      summary: Create an adjustment
+      description: Creates a revenue adjustment (credit, debit, or chargeback).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdjustmentRequest"
+      responses:
+        "201":
+          description: Adjustment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Adjustment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Use your secret API key as a Bearer token.
+        Keys are prefixed: `sk_live_` (production) or `sk_test_` (sandbox).
+
+  parameters:
+    CheckoutId:
+      name: checkout_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The checkout identifier (prefixed `co_`)
+
+    WebhookId:
+      name: webhook_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The webhook endpoint identifier (prefixed `we_`)
+
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: |
+        Client-generated UUID. If a request with the same key was already
+        processed, the original response is returned. Keys expire after 24h.
+
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Opaque cursor for pagination. Omit for the first page.
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+      description: Number of items per page.
+
+    CustomerId:
+      name: customer_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The customer identifier (prefixed `cus_`)
+
+    PaymentMethodId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The payment method identifier (prefixed `pm_`)
+
+    PlanId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The subscription plan identifier (prefixed `plan_`)
+
+    SubscriptionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The subscription identifier (prefixed `sub_`)
+
+    RenewalId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The renewal identifier (prefixed `ren_`)
+
+    PayoutIntentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The payout intent identifier (prefixed `po_`)
+
+    EntitlementId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The entitlement identifier (prefixed `ent_`)
+
+    AdjustmentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The adjustment identifier (prefixed `adj_`)
+
+  schemas:
+    # ── Enums ────────────────────────────────────────────────────────────
+
+    Chain:
+      type: string
+      enum: [tron, arbitrum, base]
+      description: Blockchain network
+
+    Token:
+      type: string
+      enum: [USDT, USDC]
+      description: Stablecoin token
+
+    CheckoutStatus:
+      type: string
+      enum: [pending, detected, confirming, confirmed, expired, failed]
+      description: |
+        - `pending` — Waiting for payment
+        - `detected` — Transaction seen on-chain, unconfirmed
+        - `confirming` — Confirmations in progress
+        - `confirmed` — Payment fully confirmed (terminal)
+        - `expired` — Checkout TTL exceeded without payment (terminal)
+        - `failed` — Unrecoverable error (terminal)
+
+    EventType:
+      type: string
+      enum:
+        - checkout.created
+        - checkout.payment_detected
+        - checkout.confirming
+        - checkout.completed
+        - checkout.expired
+        - checkout.failed
+
+    PaymentMethodStatus:
+      type: string
+      enum: [active, disabled]
+      description: |
+        - `active` — Payment method is available for use
+        - `disabled` — Payment method has been disabled
+
+    SubscriptionPlanInterval:
+      type: string
+      enum: [daily, weekly, monthly, yearly]
+      description: Billing interval for subscription plans
+
+    SubscriptionPlanStatus:
+      type: string
+      enum: [active, archived]
+      description: |
+        - `active` — Plan is available for new subscriptions
+        - `archived` — Plan is no longer available for new subscriptions
+
+    SubscriptionStatus:
+      type: string
+      enum: [trialing, active, past_due, paused, canceled, expired]
+      description: |
+        - `trialing` — Subscription is in trial period
+        - `active` — Subscription is active and billing normally
+        - `past_due` — Payment failed, retrying
+        - `paused` — Subscription is paused
+        - `canceled` — Subscription was canceled
+        - `expired` — Subscription has expired
+
+    RenewalStatus:
+      type: string
+      enum: [pending, checkout_created, paid, failed, skipped]
+      description: |
+        - `pending` — Renewal is scheduled
+        - `checkout_created` — Checkout has been created for this renewal
+        - `paid` — Renewal was successfully paid
+        - `failed` — Renewal payment failed
+        - `skipped` — Renewal was skipped (e.g., paused subscription)
+
+    PayoutIntentStatus:
+      type: string
+      enum: [draft, approved, pending_execution, executed, verifying, settled, failed, canceled]
+      description: |
+        - `draft` — Payout intent created, awaiting approval
+        - `approved` — Approved, ready for execution
+        - `pending_execution` — Execution in progress
+        - `executed` — Transaction submitted on-chain
+        - `verifying` — Verifying on-chain confirmation
+        - `settled` — On-chain settlement confirmed
+        - `failed` — Payout failed
+        - `canceled` — Payout was canceled
+
+    RevenueEventType:
+      type: string
+      enum: [checkout_confirmed, subscription_charged, refund, adjustment_credit, adjustment_debit, chargeback]
+      description: Type of revenue event
+
+    AdjustmentType:
+      type: string
+      enum: [credit, debit, chargeback]
+      description: |
+        - `credit` — Positive adjustment (e.g., refund to customer)
+        - `debit` — Negative adjustment
+        - `chargeback` — Disputed payment reversal
+
+    EntitlementValueType:
+      type: string
+      enum: [boolean, numeric, string]
+      description: The data type of the entitlement value
+
+    PayoutReferenceType:
+      type: string
+      enum: [checkout, subscription, invoice, manual]
+      description: The type of entity this payout references
+
+    # ── Request Bodies ───────────────────────────────────────────────────
+
+    CreateCheckoutRequest:
+      type: object
+      required: [amount_usd, chain, token]
+      properties:
+        amount_usd:
+          type: number
+          format: double
+          minimum: 0.01
+          description: Amount in USD
+          example: 49.99
+        chain:
+          $ref: "#/components/schemas/Chain"
+        token:
+          $ref: "#/components/schemas/Token"
+        expires_in_seconds:
+          type: integer
+          minimum: 300
+          maximum: 86400
+          default: 1800
+          description: Checkout TTL in seconds (5 min to 24 hr)
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          maxProperties: 20
+          description: Arbitrary key-value pairs (max 20 keys, max 500 chars per value)
+          example:
+            order_id: "ord_12345"
+            customer_email: "user@example.com"
+
+    CreateWebhookRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: HTTPS endpoint to receive events
+          example: "https://example.com/webhooks/billing"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventType"
+          minItems: 1
+          description: Event types to subscribe to
+        description:
+          type: string
+          maxLength: 256
+          description: Human-readable label
+
+    CreateCustomerRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Customer email address
+          example: "user@example.com"
+        name:
+          type: string
+          maxLength: 256
+          description: Customer display name
+          example: "Jane Doe"
+        external_id:
+          type: string
+          maxLength: 256
+          description: External identifier from your system
+          example: "usr_12345"
+        metadata:
+          type: object
+          additionalProperties: true
+          maxProperties: 20
+          description: Arbitrary key-value metadata
+
+    UpdateCustomerRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: Customer email address
+        name:
+          type: string
+          maxLength: 256
+          nullable: true
+          description: Customer display name
+        external_id:
+          type: string
+          maxLength: 256
+          nullable: true
+          description: External identifier from your system
+        metadata:
+          type: object
+          additionalProperties: true
+          maxProperties: 20
+          nullable: true
+          description: Arbitrary key-value metadata
+
+    CreatePaymentMethodRequest:
+      type: object
+      required: [wallet_id, chain, token]
+      properties:
+        wallet_id:
+          type: string
+          description: The wallet identifier to receive funds
+        chain:
+          $ref: "#/components/schemas/Chain"
+        token:
+          $ref: "#/components/schemas/Token"
+        display_name:
+          type: string
+          maxLength: 256
+          description: Human-readable display name
+          example: "USDT on Tron"
+        required_confirmations:
+          type: integer
+          minimum: 1
+          description: Number of block confirmations required
+        min_amount_usd:
+          type: number
+          format: double
+          nullable: true
+          description: Minimum checkout amount in USD
+        max_amount_usd:
+          type: number
+          format: double
+          nullable: true
+          description: Maximum checkout amount in USD
+        is_default:
+          type: boolean
+          default: false
+          description: Whether this is the default payment method
+
+    UpdatePaymentMethodRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+          maxLength: 256
+          nullable: true
+          description: Human-readable display name
+        required_confirmations:
+          type: integer
+          minimum: 1
+          description: Number of block confirmations required
+        min_amount_usd:
+          type: number
+          format: double
+          nullable: true
+          description: Minimum checkout amount in USD
+        max_amount_usd:
+          type: number
+          format: double
+          nullable: true
+          description: Maximum checkout amount in USD
+        is_default:
+          type: boolean
+          description: Whether this is the default payment method
+
+    CreatePaymentLinkRequest:
+      type: object
+      required: [amount_usd, payment_method_id]
+      properties:
+        amount_usd:
+          type: number
+          format: double
+          minimum: 0.01
+          description: Amount in USD
+          example: 29.99
+        payment_method_id:
+          type: string
+          description: The payment method to use for checkouts
+        description:
+          type: string
+          maxLength: 512
+          description: Description shown on the payment page
+        expires_in_seconds:
+          type: integer
+          minimum: 300
+          description: Link TTL in seconds
+
+    CreateSubscriptionPlanRequest:
+      type: object
+      required: [name, amount_usd, interval, token, chain]
+      properties:
+        name:
+          type: string
+          maxLength: 256
+          description: Plan name
+          example: "Pro Monthly"
+        description:
+          type: string
+          maxLength: 1024
+          nullable: true
+          description: Plan description
+        amount_usd:
+          type: number
+          format: double
+          minimum: 0.01
+          description: Billing amount in USD
+          example: 19.99
+        interval:
+          $ref: "#/components/schemas/SubscriptionPlanInterval"
+        trial_days:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Number of free trial days
+        token:
+          $ref: "#/components/schemas/Token"
+        chain:
+          $ref: "#/components/schemas/Chain"
+
+    UpdateSubscriptionPlanRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 256
+          description: Plan name
+        description:
+          type: string
+          maxLength: 1024
+          nullable: true
+          description: Plan description
+        status:
+          $ref: "#/components/schemas/SubscriptionPlanStatus"
+
+    CreateSubscriptionRequest:
+      type: object
+      required: [customer_id, plan_id]
+      properties:
+        customer_id:
+          type: string
+          description: The customer identifier
+        plan_id:
+          type: string
+          description: The subscription plan identifier
+        payment_method_id:
+          type: string
+          description: The payment method identifier (optional, uses default if omitted)
+
+    UpdateSubscriptionRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [cancel, cancel_immediately, pause, resume]
+          description: |
+            - `cancel` — Cancel at end of current billing period
+            - `cancel_immediately` — Cancel immediately
+            - `pause` — Pause the subscription
+            - `resume` — Resume a paused subscription
+
+    CreateEntitlementRequest:
+      type: object
+      required: [plan_id, feature_key, value_type]
+      properties:
+        plan_id:
+          type: string
+          description: The subscription plan identifier
+        feature_key:
+          type: string
+          maxLength: 256
+          description: Unique key identifying the feature
+          example: "api_requests"
+        value_type:
+          $ref: "#/components/schemas/EntitlementValueType"
+        value_boolean:
+          type: boolean
+          nullable: true
+          description: Boolean value (when value_type is boolean)
+        value_numeric:
+          type: number
+          nullable: true
+          description: Numeric value (when value_type is numeric)
+          example: 10000
+        value_string:
+          type: string
+          nullable: true
+          description: String value (when value_type is string)
+
+    UpdateEntitlementRequest:
+      type: object
+      properties:
+        value_type:
+          $ref: "#/components/schemas/EntitlementValueType"
+        value_boolean:
+          type: boolean
+          nullable: true
+          description: Boolean value (when value_type is boolean)
+        value_numeric:
+          type: number
+          nullable: true
+          description: Numeric value (when value_type is numeric)
+        value_string:
+          type: string
+          nullable: true
+          description: String value (when value_type is string)
+
+    CreatePayoutIntentRequest:
+      type: object
+      required: [recipient_address, chain, token, amount, currency]
+      properties:
+        recipient_address:
+          type: string
+          description: Blockchain address to send funds to
+        chain:
+          $ref: "#/components/schemas/Chain"
+        token:
+          $ref: "#/components/schemas/Token"
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          description: Payout amount
+        currency:
+          type: string
+          description: Currency code (e.g., USD)
+          example: "USD"
+        description:
+          type: string
+          maxLength: 512
+          nullable: true
+          description: Payout description
+        reference_type:
+          $ref: "#/components/schemas/PayoutReferenceType"
+        reference_id:
+          type: string
+          nullable: true
+          description: Identifier of the referenced entity
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the payout is due
+
+    UpdatePayoutIntentRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [approved, canceled]
+          description: Transition the payout intent to approved or canceled
+        description:
+          type: string
+          maxLength: 512
+          nullable: true
+          description: Updated description
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+          description: Updated due date
+
+    ExecutePayoutRequest:
+      type: object
+      required: [tx_hash]
+      properties:
+        tx_hash:
+          type: string
+          description: On-chain transaction hash
+
+    CreateAdjustmentRequest:
+      type: object
+      required: [type, amount, currency, reason]
+      properties:
+        type:
+          $ref: "#/components/schemas/AdjustmentType"
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          description: Adjustment amount
+        currency:
+          type: string
+          description: Currency code
+          example: "USD"
+        reason:
+          type: string
+          maxLength: 1024
+          description: Reason for the adjustment
+        checkout_id:
+          type: string
+          nullable: true
+          description: Related checkout identifier
+        subscription_id:
+          type: string
+          nullable: true
+          description: Related subscription identifier
+        customer_id:
+          type: string
+          nullable: true
+          description: Related customer identifier
+
+    # ── Response Bodies ──────────────────────────────────────────────────
+
+    Checkout:
+      type: object
+      properties:
+        checkout_id:
+          type: string
+          description: Unique identifier (prefixed `co_`)
+          example: "co_1a2b3c4d5e"
+        deposit_address:
+          type: string
+          description: Blockchain address to send funds to
+        chain:
+          $ref: "#/components/schemas/Chain"
+        token:
+          $ref: "#/components/schemas/Token"
+        amount_usd:
+          type: number
+          format: double
+          description: Original USD amount
+        amount_atomic:
+          type: string
+          description: Token amount in smallest unit (string to avoid precision loss)
+          example: "49990000"
+        status:
+          $ref: "#/components/schemas/CheckoutStatus"
+        tx_hash:
+          type: string
+          nullable: true
+          description: On-chain transaction hash (null until detected)
+        confirmations:
+          type: integer
+          description: Current confirmation count
+        required_confirmations:
+          type: integer
+          description: Confirmations needed for this chain
+          example: 19
+        expires_at:
+          type: string
+          format: date-time
+        detected_at:
+          type: string
+          format: date-time
+          nullable: true
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    CheckoutStatusResponse:
+      type: object
+      properties:
+        checkout_id:
+          type: string
+        status:
+          $ref: "#/components/schemas/CheckoutStatus"
+        tx_hash:
+          type: string
+          nullable: true
+        confirmations:
+          type: integer
+        required_confirmations:
+          type: integer
+        detected_at:
+          type: string
+          format: date-time
+          nullable: true
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        polling_interval_ms:
+          type: integer
+          description: Suggested polling interval in milliseconds
+          example: 2000
+
+    CheckoutList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Checkout"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    WebhookEndpoint:
+      type: object
+      properties:
+        webhook_id:
+          type: string
+          description: Unique identifier (prefixed `we_`)
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventType"
+        secret:
+          type: string
+          description: |
+            HMAC signing secret (prefixed `whsec_`).
+            Only returned on creation — store it securely.
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, disabled]
+        created_at:
+          type: string
+          format: date-time
+
+    WebhookEndpointList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebhookEndpoint"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    Event:
+      type: object
+      properties:
+        event_id:
+          type: string
+          description: Unique identifier (prefixed `evt_`)
+        type:
+          $ref: "#/components/schemas/EventType"
+        checkout_id:
+          type: string
+        data:
+          $ref: "#/components/schemas/Checkout"
+        created_at:
+          type: string
+          format: date-time
+
+    EventList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy]
+        version:
+          type: string
+          example: "1.0.0"
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier (prefixed `cus_`)
+          example: "cus_1a2b3c4d5e"
+        org_id:
+          type: string
+          description: Organization identifier
+        email:
+          type: string
+          format: email
+          description: Customer email address
+        name:
+          type: string
+          nullable: true
+          description: Customer display name
+        external_id:
+          type: string
+          nullable: true
+          description: External identifier from your system
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: Arbitrary key-value metadata
+        environment:
+          type: string
+          enum: [live, sandbox]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CustomerList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Customer"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    PaymentMethod:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier (prefixed `pm_`)
+          example: "pm_1a2b3c4d5e"
+        org_id:
+          type: string
+          description: Organization identifier
+        wallet_id:
+          type: string
+          description: Wallet identifier receiving funds
+        chain:
+          $ref: "#/components/schemas/Chain"
+        token:
+          $ref: "#/components/schemas/Token"
+        display_name:
+          type: string
+          nullable: true
+          description: Human-readable display name
+        status:
+          $ref: "#/components/schemas/PaymentMethodStatus"
+        is_default:
+          type: boolean
+          description: Whether this is the default payment method
+        required_confirmations:
+          type: integer
+          description: Number of block confirmations required
+        min_amount_usd:
+          type: number
+          format: double
+          nullable: true
+          description: Minimum checkout amount in USD
+        max_amount_usd:
+          type: number
+          format: double
+          nullable: true
+          description: Maximum checkout amount in USD
+        environment:
+          type: string
+          enum: [live, sandbox]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PaymentMethodList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentMethod"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    PaymentLink:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier (prefixed `pl_`)
+          example: "pl_1a2b3c4d5e"
+        org_id:
+          type: string
+          description: Organization identifier
+        amount_usd:
+          type: number
+          format: double
+          description: Amount in USD
+        payment_method_id:
+          type: string
+          description: Payment method identifier
+        description:
+          type: string
+          nullable: true
+          description: Description shown on the payment page
+        url:
+          type: string
+          format: uri
+          description: Shareable payment link URL
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        environment:
+          type: string
+          enum: [live, sandbox]
+        created_at:
+          type: string
+          format: date-time
+
+    PaymentLinkList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentLink"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    SubscriptionPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier (prefixed `plan_`)
+          example: "plan_1a2b3c4d5e"
+        org_id:
+          type: string
+          description: Organization identifier
+        name:
+          type: string
+          description: Plan name
+        description:
+          type: string
+          nullable: true
+          description: Plan description
+        amount:
+          type: number
+          format: double
+          description: Billing amount
+        currency:
+          type: string
+          description: Currency code
+        token:
+          $ref: "#/components/schemas/Token"
+        interval:
+          $ref: "#/components/schemas/SubscriptionPlanInterval"
+        interval_count:
+          type: integer
+          description: Number of intervals between billings
+        trial_days:
+          type: integer
+          description: Number of free trial days
+        status:
+          $ref: "#/components/schemas/SubscriptionPlanStatus"
+        environment:
+          type: string
+          enum: [live, sandbox]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SubscriptionPlanList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubscriptionPlan"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier (prefixed `sub_`)
+          example: "sub_1a2b3c4d5e"
+        org_id:
+          type: string
+          description: Organization identifier
+        customer_id:
+          type: string
+          description: Customer identifier
+        plan_id:
+          type: string
+          description: Subscription plan identifier
+        payment_method_id:
+          type: string
+          nullable: true
+          description: Payment method identifier
+        status:
+          $ref: "#/components/schemas/SubscriptionStatus"
+        current_period_start:
+          type: string
+          format: date-time
+          nullable: true
+        current_period_end:
+          type: string
+          format: date-time
+          nullable: true
+        trial_end:
+          type: string
+          format: date-time
+          nullable: true
+        canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancel_at_period_end:
+          type: boolean
+          description: Whether the subscription cancels at the end of the current period
+        pause_start:
+          type: string
+          format: date-time
+          nullable: true
+        pause_end:
+          type: string
+          format: date-time
+          nullable: true
+        environment:
+          type: string
+          enum: [live, sandbox]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        customer:
+          $ref: "#/components/schemas/Customer"
+        plan:
+          $ref: "#/components/schemas/SubscriptionPlan"
+
+    SubscriptionList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Subscription"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    SubscriptionRenewal:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier (prefixed `ren_`)
+          example: "ren_1a2b3c4d5e"
+        org_id:
+          type: string
+          description: Organization identifier
+        subscription_id:
+          type: string
+          description: Subscription identifier
+        period_start:
+          type: string
+          format: date-time
+          description: Start of the billing period
+        period_end:
+          type: string
+          format: date-time
+          description: End of the billing period
+        amount:
+          type: number
+          format: double
+          description: Renewal amount
+        token:
+          $ref: "#/components/schemas/Token"
+        checkout_id:
+          type: string
+          nullable: true
+          description: Associated checkout identifier
+        status:
+          $ref: "#/components/schemas/RenewalStatus"
+        attempt_count:
+          type: integer
+          description: Number of payment attempts made
+        max_attempts:
+          type: integer
+          description: Maximum payment attempts allowed
+        next_attempt_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the next payment attempt will occur
+        environment:
+          type: string
+          enum: [live, sandbox]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SubscriptionRenewalList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubscriptionRenewal"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    Entitlement:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier (prefixed `ent_`)
+          example: "ent_1a2b3c4d5e"
+        org_id:
+          type: string
+          description: Organization identifier
+        plan_id:
+          type: string
+          description: Subscription plan identifier
+        feature_key:
+          type: string
+          description: Unique key identifying the feature
+        value_type:
+          $ref: "#/components/schemas/EntitlementValueType"
+        value_boolean:
+          type: boolean
+          nullable: true
+          description: Boolean value (when value_type is boolean)
+        value_numeric:
+          type: number
+          nullable: true
+          description: Numeric value (when value_type is numeric)
+        value_string:
+          type: string
+          nullable: true
+          description: String value (when value_type is string)
+        environment:
+          type: string
+          enum: [live, sandbox]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EntitlementList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entitlement"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    EntitlementCheckResponse:
+      type: object
+      properties:
+        has_access:
+          type: boolean
+          description: Whether the customer has access to the feature
+        feature_key:
+          type: string
+          description: The feature key that was checked
+        value_type:
+          $ref: "#/components/schemas/EntitlementValueType"
+        value_boolean:
+          type: boolean
+          nullable: true
+        value_numeric:
+          type: number
+          nullable: true
+        value_string:
+          type: string
+          nullable: true
+        plan_id:
+          type: string
+          nullable: true
+          description: The plan granting the entitlement (null if no access)
+        subscription_id:
+          type: string
+          nullable: true
+          description: The active subscription (null if no access)
+
+    PayoutIntent:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier (prefixed `po_`)
+          example: "po_1a2b3c4d5e"
+        org_id:
+          type: string
+          description: Organization identifier
+        recipient_address:
+          type: string
+          description: Blockchain address to send funds to
+        chain:
+          $ref: "#/components/schemas/Chain"
+        token:
+          $ref: "#/components/schemas/Token"
+        amount:
+          type: number
+          format: double
+          description: Payout amount
+        amount_atomic:
+          type: string
+          nullable: true
+          description: Token amount in smallest unit
+        currency:
+          type: string
+          description: Currency code
+        status:
+          $ref: "#/components/schemas/PayoutIntentStatus"
+        description:
+          type: string
+          nullable: true
+        reference_type:
+          $ref: "#/components/schemas/PayoutReferenceType"
+        reference_id:
+          type: string
+          nullable: true
+          description: Identifier of the referenced entity
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_by:
+          type: string
+          nullable: true
+          description: User who approved the payout
+        executed_at:
+          type: string
+          format: date-time
+          nullable: true
+        expected_tx_hash:
+          type: string
+          nullable: true
+          description: Expected on-chain transaction hash
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        failed_at:
+          type: string
+          format: date-time
+          nullable: true
+        canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        failure_reason:
+          type: string
+          nullable: true
+        environment:
+          type: string
+          enum: [live, sandbox]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PayoutIntentList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PayoutIntent"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    Settlement:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier
+        org_id:
+          type: string
+          description: Organization identifier
+        payout_intent_id:
+          type: string
+          nullable: true
+          description: Associated payout intent identifier
+        chain:
+          $ref: "#/components/schemas/Chain"
+        tx_hash:
+          type: string
+          description: On-chain transaction hash
+        log_index:
+          type: integer
+          description: Log index within the transaction
+        from_address:
+          type: string
+          nullable: true
+          description: Sender address
+        to_address:
+          type: string
+          nullable: true
+          description: Recipient address
+        token:
+          $ref: "#/components/schemas/Token"
+        amount_atomic:
+          type: string
+          description: Token amount in smallest unit
+        block_number:
+          type: integer
+          nullable: true
+        block_hash:
+          type: string
+          nullable: true
+        confirmations:
+          type: integer
+          description: Current confirmation count
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        detected_at:
+          type: string
+          format: date-time
+        environment:
+          type: string
+          enum: [live, sandbox]
+        created_at:
+          type: string
+          format: date-time
+
+    SettlementList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Settlement"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    ReconciliationSummary:
+      type: object
+      properties:
+        matched:
+          type: object
+          properties:
+            count:
+              type: integer
+            total_amount:
+              type: number
+              format: double
+        unmatched_payouts:
+          type: object
+          properties:
+            count:
+              type: integer
+            total_amount:
+              type: number
+              format: double
+        unexpected_settlements:
+          type: object
+          properties:
+            count:
+              type: integer
+            total_amount:
+              type: number
+              format: double
+        discrepancies:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReconciliationDiscrepancy"
+
+    ReconciliationDiscrepancy:
+      type: object
+      properties:
+        payout_intent_id:
+          type: string
+        settlement_id:
+          type: string
+        expected_amount:
+          type: number
+          format: double
+        actual_amount:
+          type: number
+          format: double
+        difference:
+          type: number
+          format: double
+        chain:
+          $ref: "#/components/schemas/Chain"
+
+    RevenueEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier
+        org_id:
+          type: string
+          description: Organization identifier
+        event_type:
+          $ref: "#/components/schemas/RevenueEventType"
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+        token:
+          $ref: "#/components/schemas/Token"
+        chain:
+          $ref: "#/components/schemas/Chain"
+        checkout_id:
+          type: string
+          nullable: true
+        subscription_id:
+          type: string
+          nullable: true
+        customer_id:
+          type: string
+          nullable: true
+        renewal_id:
+          type: string
+          nullable: true
+        adjustment_id:
+          type: string
+          nullable: true
+        tx_hash:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        occurred_at:
+          type: string
+          format: date-time
+        environment:
+          type: string
+          enum: [live, sandbox]
+        created_at:
+          type: string
+          format: date-time
+
+    RevenueEventList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenueEvent"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    AccountingPeriod:
+      type: object
+      properties:
+        period:
+          type: string
+          description: Period label (e.g., "2025-01" for monthly)
+        gross_revenue:
+          type: number
+          format: double
+        refunds:
+          type: number
+          format: double
+        adjustments_credit:
+          type: number
+          format: double
+        adjustments_debit:
+          type: number
+          format: double
+        chargebacks:
+          type: number
+          format: double
+        net_revenue:
+          type: number
+          format: double
+
+    AccountingPeriodList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountingPeriod"
+
+    Adjustment:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier (prefixed `adj_`)
+          example: "adj_1a2b3c4d5e"
+        org_id:
+          type: string
+          description: Organization identifier
+        revenue_event_id:
+          type: string
+          nullable: true
+          description: Associated revenue event identifier
+        type:
+          $ref: "#/components/schemas/AdjustmentType"
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+        reason:
+          type: string
+          description: Reason for the adjustment
+        customer_id:
+          type: string
+          nullable: true
+        checkout_id:
+          type: string
+          nullable: true
+        subscription_id:
+          type: string
+          nullable: true
+        applied_by:
+          type: string
+          nullable: true
+          description: User who applied the adjustment
+        environment:
+          type: string
+          enum: [live, sandbox]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AdjustmentList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Adjustment"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+
+    # ── Errors ───────────────────────────────────────────────────────────
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [type, code, message]
+          properties:
+            type:
+              type: string
+              enum:
+                - invalid_request
+                - authentication_error
+                - not_found
+                - idempotency_conflict
+                - rate_limited
+                - internal_error
+            code:
+              type: string
+              description: Machine-readable error code
+              example: "checkout_not_found"
+            message:
+              type: string
+              description: Human-readable message
+              example: "No checkout found with ID co_abc123"
+            param:
+              type: string
+              nullable: true
+              description: The request parameter that caused the error
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: invalid_request
+              code: missing_required_field
+              message: "The 'amount_usd' field is required."
+              param: amount_usd
+
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: authentication_error
+              code: api_key_invalid
+              message: "The API key provided is invalid."
+              param: null
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: not_found
+              code: checkout_not_found
+              message: "No checkout found with ID co_abc123."
+              param: checkout_id
+
+    IdempotencyConflict:
+      description: Idempotency key reused with different parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: idempotency_conflict
+              code: idempotency_key_reused
+              message: "This idempotency key was already used with different parameters."
+              param: null
+
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Requests allowed per window
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Requests remaining in current window
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Unix timestamp when the window resets
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: rate_limited
+              code: too_many_requests
+              message: "Rate limit exceeded. Retry after 30 seconds."
+              param: null
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: internal_error
+              code: internal_server_error
+              message: "An unexpected error occurred."
+              param: null

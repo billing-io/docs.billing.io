@@ -1,0 +1,99 @@
+---
+title: "What is Non-Custodial?"
+sidebarTitle: "What is Non-Custodial?"
+description: "Understand how non-custodial payments work, why they matter, and how billing.io is fundamentally different from traditional payment processors."
+---
+
+# What is non-custodial?
+
+With a traditional payment processor like Stripe or PayPal, your customer's money goes to the processor first. The processor holds it, takes a cut, and then sends you the rest days or weeks later. Your revenue sits in someone else's bank account until they decide to release it.
+
+**billing.io works differently.** When your customer pays, the crypto goes **directly from their wallet to yours**. billing.io watches the blockchain, confirms the payment landed, and sends you a webhook notification. That's it. We never hold, touch, or have access to your funds at any point.
+
+<Tip>
+**Think of it like this:** billing.io is a security camera watching your mailbox. It sees when a delivery arrives, confirms it's the right package, and texts you -- but it never opens or touches anything.
+</Tip>
+
+---
+
+## How traditional processors work
+
+<Steps>
+  <Step title="Customer pays">
+    Your customer sends money to **the processor's account**, not yours.
+  </Step>
+  <Step title="Processor holds the funds">
+    The processor sits on your money. They decide when to release it -- usually on a schedule (weekly, monthly, or with a rolling reserve).
+  </Step>
+  <Step title="Processor takes their cut">
+    Fees are deducted before you see a penny.
+  </Step>
+  <Step title="You eventually get paid">
+    Days or weeks later, the processor sends what's left to your bank account. If they freeze your account, you might wait months -- or never get it.
+  </Step>
+</Steps>
+
+## How billing.io works
+
+<Steps>
+  <Step title="Customer pays">
+    Your customer sends crypto **directly to your wallet address**. The funds are yours the moment the transaction is confirmed on the blockchain.
+  </Step>
+  <Step title="billing.io watches the blockchain">
+    Our chain watcher monitors the transaction, counts block confirmations, and tracks the payment status in real time.
+  </Step>
+  <Step title="You get notified">
+    Once the payment is confirmed, billing.io fires a `checkout.completed` webhook to your server. That's our only job.
+  </Step>
+</Steps>
+
+<Note>
+There is no step 4. Your funds are already in your wallet. There's nothing to withdraw, no payout to wait for, and no one standing between you and your money.
+</Note>
+
+---
+
+## Why this matters
+
+<CardGroup cols={2}>
+  <Card title="No frozen accounts" icon="shield-check">
+    Your money is in your wallet the moment it arrives. No processor can freeze your account, hold your funds, or shut you down overnight.
+  </Card>
+  <Card title="No payout delays" icon="clock">
+    There's no "payout schedule" because funds settle directly to you on-chain. You have your money in minutes, not days or weeks.
+  </Card>
+  <Card title="No counterparty risk" icon="lock">
+    billing.io literally cannot lose your money because we never have it. If billing.io disappeared tomorrow, your funds would be unaffected.
+  </Card>
+  <Card title="Full transparency" icon="eye">
+    Every transaction is verifiable on the public blockchain. You don't have to trust anyone's internal ledger -- you can verify it yourself.
+  </Card>
+</CardGroup>
+
+---
+
+## What billing.io actually does
+
+If we never touch your money, what do we do? We handle everything around the payment:
+
+- **Generate unique deposit addresses** so each checkout maps to a specific payment
+- **Monitor the blockchain** in real time to detect incoming transactions
+- **Count block confirmations** to make sure payments are final and irreversible
+- **Send webhook notifications** so your backend knows the instant a payment is confirmed
+- **Manage subscriptions** by tracking renewal dates and creating checkout sessions automatically
+- **Provide dashboards and APIs** so you can manage everything programmatically
+
+We're the infrastructure layer that makes accepting crypto payments simple -- without ever being in the flow of funds.
+
+---
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Create your first checkout in under 5 minutes.
+  </Card>
+  <Card title="How it Works" icon="diagram-project" href="/concepts/architecture">
+    Dive deeper into the architecture and payment flow.
+  </Card>
+</CardGroup>

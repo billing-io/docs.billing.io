@@ -1,0 +1,164 @@
+---
+title: "Go"
+description: "Official billing.io SDK for Go"
+---
+
+The official billing.io SDK for Go 1.21+. Zero external dependencies -- uses only the standard library.
+
+<CardGroup cols={2}>
+  <Card title="Go Package" icon="golang" href="https://pkg.go.dev/github.com/billing-io/billing-go">
+    github.com/billing-io/billing-go
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/billing-io/billing-go">
+    billing-io/billing-go
+  </Card>
+</CardGroup>
+
+## Installation
+
+```bash
+go get github.com/billing-io/billing-go
+```
+
+## Quick Start
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+
+	billingio "github.com/billing-io/billing-go"
+)
+
+func main() {
+	client := billingio.New("sk_live_...")
+
+	checkout, err := client.Checkouts.Create(context.Background(), billingio.CreateCheckoutParams{
+		AmountUSD: 49.99,
+		Chain:     "tron",
+		Token:     "USDT",
+		Metadata: map[string]string{
+			"order_id": "ord_12345",
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(checkout.CheckoutID)
+	fmt.Println(checkout.DepositAddress)
+}
+```
+
+## Create a Checkout
+
+```go
+checkout, err := client.Checkouts.Create(ctx, billingio.CreateCheckoutParams{
+	AmountUSD: 100.00,
+	Chain:     "arbitrum",
+	Token:     "USDC",
+	Metadata: map[string]string{
+		"customer_email": "alice@example.com",
+	},
+})
+```
+
+## List with Auto-Pagination
+
+The SDK provides an iterator for automatic cursor-based pagination:
+
+```go
+iter := client.Checkouts.List(ctx, billingio.ListParams{Limit: 25})
+
+for iter.Next() {
+	checkout := iter.Current()
+	fmt.Println(checkout.CheckoutID, checkout.Status)
+}
+if err := iter.Err(); err != nil {
+	// handle error
+}
+```
+
+Or fetch a single page:
+
+```go
+page, err := client.Checkouts.ListPage(ctx, billingio.ListParams{Limit: 10})
+
+for _, checkout := range page.Data {
+	fmt.Println(checkout.CheckoutID)
+}
+```
+
+## Get Checkout Status
+
+```go
+status, err := client.Checkouts.GetStatus(ctx, "chk_abc123")
+
+fmt.Println(status.Status)                // "confirming"
+fmt.Println(status.Confirmations)          // 8
+fmt.Println(status.RequiredConfirmations)  // 19
+```
+
+## Webhook Signature Verification
+
+```go
+func handleWebhook(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+
+	isValid := billingio.VerifyWebhookSignature(
+		string(body),
+		r.Header.Get("X-Billing-Signature"),
+		"whsec_...",
+	)
+
+	if !isValid {
+		http.Error(w, "Invalid signature", http.StatusUnauthorized)
+		return
+	}
+
+	// process event...
+	w.WriteHeader(http.StatusOK)
+}
+```
+
+## Error Handling
+
+The SDK provides typed error helpers:
+
+```go
+checkout, err := client.Checkouts.Create(ctx, params)
+if err != nil {
+	if billingio.IsNotFound(err) {
+		// 404 - resource not found
+	} else if billingio.IsRateLimited(err) {
+		// 429 - back off and retry
+	} else if billingio.IsAuthError(err) {
+		// 401 - check API key
+	}
+	return err
+}
+```
+
+All API errors are returned as `*billingio.Error`:
+
+```go
+var apiErr *billingio.Error
+if errors.As(err, &apiErr) {
+	fmt.Println(apiErr.Status)  // 422
+	fmt.Println(apiErr.Code)    // "validation_error"
+	fmt.Println(apiErr.Message) // "amount_usd must be positive"
+}
+```
+
+## Context Support
+
+All methods accept a `context.Context` for cancellation and timeouts:
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+
+checkout, err := client.Checkouts.Create(ctx, params)
+```

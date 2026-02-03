@@ -1,0 +1,188 @@
+---
+title: "Architecture"
+sidebarTitle: "Architecture"
+description: "How billing.io works under the hood"
+---
+
+## Non-Custodial Model
+
+billing.io is fundamentally different from traditional payment processors. We **never hold your crypto**. Payments flow directly from your customers to your wallets on-chain. billing.io orchestrates the payment flow, monitors the blockchain for confirmations, and charges orchestration fees separately through Stripe.
+
+<Note>
+  billing.io charges fees via Stripe (off-chain, post-paid) -- not by deducting from crypto payments.
+  Your customers' payments land in your wallet in full.
+</Note>
+
+This architecture means:
+
+- **No custodial risk** -- billing.io never has access to your funds
+- **No withdrawal delays** -- crypto settles directly to your wallets
+- **Transparent billing** -- orchestration fees appear on your Stripe invoice, separate from crypto revenue
+- **Full audit trail** -- every event is tracked in an immutable ledger
+
+## Core Domains
+
+billing.io is organized into four core domains, each handling a distinct part of the payment lifecycle.
+
+```
++------------------+     +-------------------+     +------------------+     +-----------------+
+|    Payments      |     |  Subscriptions    |     |     Payouts      |     |    Revenue      |
+|------------------|     |-------------------|     |------------------|     |-----------------|
+| Payment Methods  |     | Plans             |     | Payout Intents   |     | Revenue Events  |
+| Checkouts        |---->| Subscriptions     |---->| Settlements      |---->| Accounting      |
+| Payment Links    |     | Renewals          |     | Reconciliation   |     | Adjustments     |
+|                  |     | Entitlements      |     |                  |     |                 |
++------------------+     +-------------------+     +------------------+     +-----------------+
+```
+
+<AccordionGroup>
+  <Accordion title="Payments">
+    The entry point for all money flow. **Payment Methods** define how you receive crypto (chain + token + wallet + rules).
+    **Checkouts** are individual payment sessions. **Payment Links** are shareable URLs that generate checkouts on the fly.
+  </Accordion>
+  <Accordion title="Subscriptions">
+    Recurring billing for your customers. **Plans** define the terms (amount, interval, token).
+    **Subscriptions** track the customer-plan relationship through a full lifecycle. **Renewals** handle each
+    billing period. **Entitlements** let you gate features per plan.
+  </Accordion>
+  <Accordion title="Payouts">
+    Non-custodial payout orchestration. You define **Payout Intents**, execute them from your own wallet,
+    and the chain-watcher verifies **Settlements** on-chain. **Reconciliation** matches intents to settlements.
+  </Accordion>
+  <Accordion title="Revenue">
+    Complete financial tracking. **Revenue Events** form an immutable ledger.
+    **Accounting** provides period summaries. **Adjustments** handle credits, debits, and chargebacks.
+  </Accordion>
+</AccordionGroup>
+
+## Multi-Tenancy
+
+Every resource in billing.io is scoped to an organization via `org_id`. Row Level Security (RLS) policies enforce isolation at the database level using a `get_user_org_ids()` function, so users can only access data belonging to organizations they are members of.
+
+```
+Organizations
+  |
+  +-- Merchants (billing accounts)
+  +-- Payment Methods
+  +-- Customers
+  +-- Subscriptions
+  +-- Payouts
+  +-- Revenue Events
+  +-- ... (all resources)
+```
+
+<Warning>
+  All API calls are automatically scoped to your organization. You cannot access resources belonging to other organizations,
+  even if you know their IDs. RLS is enforced at the database layer, not just the application layer.
+</Warning>
+
+## Environment Isolation
+
+Every resource has an `environment` column set to either `live` or `sandbox`. These environments are completely isolated -- sandbox data never appears in live views and vice versa.
+
+| Feature | Live | Sandbox |
+|---------|------|---------|
+| Real blockchain transactions | Yes | Simulated |
+| Stripe billing | Charged | Free |
+| Payment confirmations | Chain-watcher | Simulated via API |
+| Data isolation | Full | Full |
+| API endpoints | Same | Same |
+
+<Tip>
+  Toggle between environments using the Live/Sandbox switch in the dashboard.
+  All API endpoints behave identically in both environments, so you can build and test with confidence
+  before going live.
+</Tip>
+
+## Chain-Watcher Integration
+
+The chain-watcher is a Go service that monitors supported blockchains for transaction activity. It connects to billing.io through authenticated internal endpoints.
+
+<Steps>
+  <Step title="Transaction Detected">
+    The chain-watcher monitors on-chain activity for addresses associated with active checkouts and payout intents.
+  </Step>
+  <Step title="Confirmation Tracking">
+    Once a transaction is detected, the chain-watcher tracks block confirmations until the required threshold is met.
+  </Step>
+  <Step title="Callback to billing.io">
+    The chain-watcher calls internal endpoints (authenticated via `CHAIN_WATCHER_SECRET` Bearer token) to report:
+    - **Payment confirmations** -- `POST /api/billing/record-usage`
+    - **Settlement verification** -- `POST /api/billing/verify-settlement`
+    - **Subscription renewals** -- `POST /api/billing/subscription-renewal`
+  </Step>
+  <Step title="State Update">
+    billing.io updates the relevant records (checkout, payout intent, subscription), creates revenue events, and reports usage to Stripe.
+  </Step>
+</Steps>
+
+## ID Prefix Convention
+
+All billing.io resources use prefixed IDs for easy identification. IDs are generated with 24 random hex characters (12 bytes of entropy).
+
+| Entity | Prefix | Example |
+|--------|--------|---------|
+| Payment Method | `pm_` | `pm_a1b2c3d4e5f6a1b2c3d4e5f6` |
+| Customer | `cus_` | `cus_a1b2c3d4e5f6a1b2c3d4e5f6` |
+| Subscription | `sub_` | `sub_a1b2c3d4e5f6a1b2c3d4e5f6` |
+| Subscription Plan | `plan_` | `plan_a1b2c3d4e5f6a1b2c3d4e5f6` |
+| Payout Intent | `po_` | `po_a1b2c3d4e5f6a1b2c3d4e5f6` |
+| Settlement | `stl_` | `stl_a1b2c3d4e5f6a1b2c3d4e5f6` |
+| Revenue Event | `rev_` | `rev_a1b2c3d4e5f6a1b2c3d4e5f6` |
+| Adjustment | `adj_` | `adj_a1b2c3d4e5f6a1b2c3d4e5f6` |
+| Payment Link | `pl_` | `pl_a1b2c3d4e5f6a1b2c3d4e5f6` |
+| Checkout | `chk_` | `chk_a1b2c3d4e5f6a1b2c3d4e5f6` |
+
+<Info>
+  Prefixed IDs make it easy to identify resource types in logs, URLs, and support requests.
+  When contacting support, sharing the full prefixed ID helps us locate your resource instantly.
+</Info>
+
+## Supported Chains
+
+billing.io supports the following blockchain networks and tokens:
+
+| Chain | Tokens | Required Confirmations | Block Explorer |
+|-------|--------|----------------------|----------------|
+| Tron | USDT, USDC | 20 | [tronscan.org](https://tronscan.org) |
+| Arbitrum | USDT, USDC | 12 | [arbiscan.io](https://arbiscan.io) |
+| Base | USDT, USDC | 12 | [basescan.org](https://basescan.org) |
+
+<Tip>
+  All supported tokens are stablecoins pegged to USD. This means the amount your customer pays
+  in crypto matches the USD amount you specified -- no exchange rate risk.
+</Tip>
+
+## Data Flow Summary
+
+Here is the end-to-end flow from checkout creation to revenue recording:
+
+```
+Customer initiates payment
+  |
+  v
+Checkout created (pending)
+  |
+  v
+Customer sends crypto to merchant wallet
+  |
+  v
+Chain-watcher detects transaction (detected -> confirming)
+  |
+  v
+Required confirmations reached (confirmed)
+  |
+  v
+Usage reported to Stripe (orchestration fee tracked)
+  |
+  v
+Revenue event created (immutable ledger entry)
+  |
+  v
+Accounting period updated (gross, fees, net)
+```
+
+<Info>
+  At no point does billing.io take custody of funds. The crypto moves directly from the customer's
+  wallet to the merchant's wallet on-chain. billing.io observes and records.
+</Info>

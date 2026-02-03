@@ -1,0 +1,1090 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "billing.io API",
+    "description": "Non-custodial crypto checkout API. Create payment checkouts, monitor status\nvia polling or webhooks, and manage webhook endpoints.\n\n## Authentication\nAll endpoints (except health) require a Bearer token in the `Authorization` header.\nKeys are prefixed `sk_live_` (production) or `sk_test_` (sandbox).\n\n## Webhooks\nEvents are signed with HMAC-SHA256. The `X-Billing-Signature` header contains:\n`t={unix_timestamp},v1={hex_hmac_sha256}`\n\nSigned payload: `{timestamp}.{raw_body}`\n\nRetry policy: 3 attempts with exponential backoff (immediate, 5 min, 30 min).\n",
+    "version": "1.0.0",
+    "contact": {
+      "name": "billing.io Support"
+    },
+    "license": {
+      "name": "Proprietary",
+      "url": "https://billing.io/terms"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.billing.io/v1",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:8080/v1",
+      "description": "Local development"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Checkouts",
+      "description": "Create and monitor crypto payment checkouts"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Register endpoints to receive event notifications"
+    },
+    {
+      "name": "Events",
+      "description": "Query event history"
+    },
+    {
+      "name": "Health",
+      "description": "Service health"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health check",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/checkouts": {
+      "post": {
+        "operationId": "createCheckout",
+        "tags": [
+          "Checkouts"
+        ],
+        "summary": "Create a checkout",
+        "description": "Creates a new payment checkout and returns a deposit address.\nSupports idempotency via the `Idempotency-Key` header.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCheckoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Checkout created",
+            "headers": {
+              "Idempotency-Key": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Checkout"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "get": {
+        "operationId": "listCheckouts",
+        "tags": [
+          "Checkouts"
+        ],
+        "summary": "List checkouts",
+        "description": "Returns a paginated list of checkouts, newest first.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CheckoutStatus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Checkout list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/checkouts/{checkout_id}": {
+      "get": {
+        "operationId": "getCheckout",
+        "tags": [
+          "Checkouts"
+        ],
+        "summary": "Get a checkout",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CheckoutId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Checkout details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Checkout"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/checkouts/{checkout_id}/status": {
+      "get": {
+        "operationId": "getCheckoutStatus",
+        "tags": [
+          "Checkouts"
+        ],
+        "summary": "Get checkout status",
+        "description": "Lightweight status endpoint for polling. Returns current status,\nconfirmations, and polling hints.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CheckoutId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Checkout status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/webhooks": {
+      "post": {
+        "operationId": "createWebhookEndpoint",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Create a webhook endpoint",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhookRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Webhook endpoint created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookEndpoint"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "get": {
+        "operationId": "listWebhookEndpoints",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "List webhook endpoints",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook endpoint list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookEndpointList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/webhooks/{webhook_id}": {
+      "get": {
+        "operationId": "getWebhookEndpoint",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Get a webhook endpoint",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WebhookId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook endpoint details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookEndpoint"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteWebhookEndpoint",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Delete a webhook endpoint",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WebhookId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Webhook endpoint deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "operationId": "listEvents",
+        "tags": [
+          "Events"
+        ],
+        "summary": "List events",
+        "description": "Returns a paginated list of webhook events, newest first.\nUseful for replaying missed webhooks or debugging.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/EventType"
+            }
+          },
+          {
+            "name": "checkout_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/events/{event_id}": {
+      "get": {
+        "operationId": "getEvent",
+        "tags": [
+          "Events"
+        ],
+        "summary": "Get an event",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Event"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Use your secret API key as a Bearer token.\nKeys are prefixed: `sk_live_` (production) or `sk_test_` (sandbox).\n"
+      }
+    },
+    "parameters": {
+      "CheckoutId": {
+        "name": "checkout_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "The checkout identifier (prefixed `co_`)"
+      },
+      "WebhookId": {
+        "name": "webhook_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "The webhook endpoint identifier (prefixed `we_`)"
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Client-generated UUID. If a request with the same key was already\nprocessed, the original response is returned. Keys expire after 24h.\n"
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Opaque cursor for pagination. Omit for the first page."
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 25
+        },
+        "description": "Number of items per page."
+      }
+    },
+    "schemas": {
+      "Chain": {
+        "type": "string",
+        "enum": [
+          "tron",
+          "arbitrum"
+        ],
+        "description": "Blockchain network"
+      },
+      "Token": {
+        "type": "string",
+        "enum": [
+          "USDT",
+          "USDC"
+        ],
+        "description": "Stablecoin token"
+      },
+      "CheckoutStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "detected",
+          "confirming",
+          "confirmed",
+          "expired",
+          "failed"
+        ],
+        "description": "- `pending` — Waiting for payment\n- `detected` — Transaction seen on-chain, unconfirmed\n- `confirming` — Confirmations in progress\n- `confirmed` — Payment fully confirmed (terminal)\n- `expired` — Checkout TTL exceeded without payment (terminal)\n- `failed` — Unrecoverable error (terminal)\n"
+      },
+      "EventType": {
+        "type": "string",
+        "enum": [
+          "checkout.created",
+          "checkout.payment_detected",
+          "checkout.confirming",
+          "checkout.completed",
+          "checkout.expired",
+          "checkout.failed"
+        ]
+      },
+      "CreateCheckoutRequest": {
+        "type": "object",
+        "required": [
+          "amount_usd",
+          "chain",
+          "token"
+        ],
+        "properties": {
+          "amount_usd": {
+            "type": "number",
+            "format": "double",
+            "minimum": 0.01,
+            "description": "Amount in USD",
+            "example": 49.99
+          },
+          "chain": {
+            "$ref": "#/components/schemas/Chain"
+          },
+          "token": {
+            "$ref": "#/components/schemas/Token"
+          },
+          "expires_in_seconds": {
+            "type": "integer",
+            "minimum": 300,
+            "maximum": 86400,
+            "default": 1800,
+            "description": "Checkout TTL in seconds (5 min to 24 hr)"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 20,
+            "description": "Arbitrary key-value pairs (max 20 keys, max 500 chars per value)",
+            "example": {
+              "order_id": "ord_12345",
+              "customer_email": "user@example.com"
+            }
+          }
+        }
+      },
+      "CreateWebhookRequest": {
+        "type": "object",
+        "required": [
+          "url",
+          "events"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "HTTPS endpoint to receive events",
+            "example": "https://example.com/webhooks/billing"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventType"
+            },
+            "minItems": 1,
+            "description": "Event types to subscribe to"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Human-readable label"
+          }
+        }
+      },
+      "Checkout": {
+        "type": "object",
+        "properties": {
+          "checkout_id": {
+            "type": "string",
+            "description": "Unique identifier (prefixed `co_`)",
+            "example": "co_1a2b3c4d5e"
+          },
+          "deposit_address": {
+            "type": "string",
+            "description": "Blockchain address to send funds to"
+          },
+          "chain": {
+            "$ref": "#/components/schemas/Chain"
+          },
+          "token": {
+            "$ref": "#/components/schemas/Token"
+          },
+          "amount_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "Original USD amount"
+          },
+          "amount_atomic": {
+            "type": "string",
+            "description": "Token amount in smallest unit (string to avoid precision loss)",
+            "example": "49990000"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CheckoutStatus"
+          },
+          "tx_hash": {
+            "type": "string",
+            "nullable": true,
+            "description": "On-chain transaction hash (null until detected)"
+          },
+          "confirmations": {
+            "type": "integer",
+            "description": "Current confirmation count"
+          },
+          "required_confirmations": {
+            "type": "integer",
+            "description": "Confirmations needed for this chain",
+            "example": 19
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "detected_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "confirmed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CheckoutStatusResponse": {
+        "type": "object",
+        "properties": {
+          "checkout_id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CheckoutStatus"
+          },
+          "tx_hash": {
+            "type": "string",
+            "nullable": true
+          },
+          "confirmations": {
+            "type": "integer"
+          },
+          "required_confirmations": {
+            "type": "integer"
+          },
+          "detected_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "confirmed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "polling_interval_ms": {
+            "type": "integer",
+            "description": "Suggested polling interval in milliseconds",
+            "example": 2000
+          }
+        }
+      },
+      "CheckoutList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Checkout"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "WebhookEndpoint": {
+        "type": "object",
+        "properties": {
+          "webhook_id": {
+            "type": "string",
+            "description": "Unique identifier (prefixed `we_`)"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventType"
+            }
+          },
+          "secret": {
+            "type": "string",
+            "description": "HMAC signing secret (prefixed `whsec_`).\nOnly returned on creation — store it securely.\n"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WebhookEndpointList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookEndpoint"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "description": "Unique identifier (prefixed `evt_`)"
+          },
+          "type": {
+            "$ref": "#/components/schemas/EventType"
+          },
+          "checkout_id": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Checkout"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EventList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "example": "1.0.0"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "type",
+              "code",
+              "message"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "invalid_request",
+                  "authentication_error",
+                  "not_found",
+                  "idempotency_conflict",
+                  "rate_limited",
+                  "internal_error"
+                ]
+              },
+              "code": {
+                "type": "string",
+                "description": "Machine-readable error code",
+                "example": "checkout_not_found"
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable message",
+                "example": "No checkout found with ID co_abc123"
+              },
+              "param": {
+                "type": "string",
+                "nullable": true,
+                "description": "The request parameter that caused the error"
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "type": "invalid_request",
+                "code": "missing_required_field",
+                "message": "The 'amount_usd' field is required.",
+                "param": "amount_usd"
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Authentication failed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "type": "authentication_error",
+                "code": "api_key_invalid",
+                "message": "The API key provided is invalid.",
+                "param": null
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "type": "not_found",
+                "code": "checkout_not_found",
+                "message": "No checkout found with ID co_abc123.",
+                "param": "checkout_id"
+              }
+            }
+          }
+        }
+      },
+      "IdempotencyConflict": {
+        "description": "Idempotency key reused with different parameters",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "type": "idempotency_conflict",
+                "code": "idempotency_key_reused",
+                "message": "This idempotency key was already used with different parameters.",
+                "param": null
+              }
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate limit exceeded",
+        "headers": {
+          "X-RateLimit-Limit": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Requests allowed per window"
+          },
+          "X-RateLimit-Remaining": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Requests remaining in current window"
+          },
+          "X-RateLimit-Reset": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Unix timestamp when the window resets"
+          },
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Seconds to wait before retrying"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "type": "rate_limited",
+                "code": "too_many_requests",
+                "message": "Rate limit exceeded. Retry after 30 seconds.",
+                "param": null
+              }
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "type": "internal_error",
+                "code": "internal_server_error",
+                "message": "An unexpected error occurred.",
+                "param": null
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

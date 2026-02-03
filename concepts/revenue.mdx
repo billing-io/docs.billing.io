@@ -1,0 +1,346 @@
+---
+title: "Revenue"
+sidebarTitle: "Revenue"
+description: "Track, reconcile, and export your revenue"
+---
+
+## Overview
+
+billing.io provides a complete revenue tracking system built around three pillars:
+
+| Pillar | Purpose | Dashboard Location |
+|--------|---------|-------------------|
+| **Revenue Events** | Immutable ledger of every monetary event | Revenue > Timeline |
+| **Accounting Periods** | Aggregated summaries for financial reporting | Revenue > Accounting |
+| **Adjustments** | Manual credits, debits, and chargebacks | Revenue > Adjustments |
+
+Together, these give you a full picture of your crypto revenue -- from individual transaction events to period-level accounting summaries ready for export.
+
+## Revenue Events
+
+Revenue events form an **immutable append-only ledger**. Every time money moves -- a checkout is confirmed, a subscription is charged, a refund is issued -- a revenue event is created. These events cannot be edited or deleted, ensuring a complete audit trail.
+
+Each revenue event records:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Event ID (prefixed `rev_`) |
+| `event_type` | Type of monetary event (see below) |
+| `amount` | Dollar amount of the event |
+| `currency` | Currency (typically `USD`) |
+| `token` | Crypto token involved (USDT, USDC) |
+| `chain` | Blockchain network |
+| `tx_hash` | On-chain transaction hash (when applicable) |
+| `description` | Human-readable description |
+| `checkout_id` | Linked checkout (when applicable) |
+| `subscription_id` | Linked subscription (when applicable) |
+| `adjustment_id` | Linked adjustment (when applicable) |
+| `occurred_at` | When the event occurred |
+
+### Event Types
+
+<AccordionGroup>
+  <Accordion title="checkout_confirmed">
+    A one-time checkout payment has been confirmed on-chain. This is the most common event type
+    and represents direct revenue from a customer payment.
+  </Accordion>
+  <Accordion title="subscription_charged">
+    A recurring subscription renewal payment has been confirmed on-chain. Created automatically
+    when the chain-watcher confirms a subscription renewal checkout.
+  </Accordion>
+  <Accordion title="refund">
+    A refund has been issued. Since billing.io is non-custodial, refunds are tracked as revenue
+    events for bookkeeping purposes. The actual refund transaction is executed by the merchant.
+  </Accordion>
+  <Accordion title="adjustment_credit">
+    A manual credit adjustment has been applied. This increases the net revenue for the period.
+    Common use cases include goodwill credits and promotional adjustments.
+  </Accordion>
+  <Accordion title="adjustment_debit">
+    A manual debit adjustment has been applied. This decreases the net revenue for the period.
+    Used for corrections and write-offs.
+  </Accordion>
+  <Accordion title="chargeback">
+    A chargeback has been recorded. While crypto payments cannot be "charged back" in the
+    traditional sense, this event type tracks disputed transactions and their resolution
+    for accounting purposes.
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  Revenue events are **immutable**. To correct an error, create an adjustment (credit or debit)
+  rather than trying to modify an existing event. This preserves the audit trail.
+</Note>
+
+## Accounting Periods
+
+The accounting view aggregates revenue events into period-level summaries. Each period provides:
+
+| Metric | Description |
+|--------|-------------|
+| **Gross Revenue** | Total confirmed payments (checkouts + subscription charges) |
+| **Fees** | billing.io orchestration fees for the period |
+| **Net Revenue** | Gross revenue minus fees |
+| **Adjustments** | Sum of credits, debits, and chargebacks |
+| **Adjusted Net** | Net revenue plus/minus adjustments |
+
+### Revenue Timeline vs. Accounting View
+
+billing.io offers two complementary ways to look at your revenue:
+
+<CardGroup cols={2}>
+  <Card title="Revenue Timeline" icon="timeline">
+    A chronological stream of individual revenue events. Use this view to see exactly what happened
+    and when -- every checkout confirmation, every subscription charge, every adjustment. Best for
+    investigating specific transactions and understanding the sequence of events.
+  </Card>
+  <Card title="Accounting View" icon="calculator">
+    Aggregated summaries grouped by accounting period. Use this view for financial reporting,
+    month-end reconciliation, and CSV exports. Best for understanding overall business
+    performance and preparing financial statements.
+  </Card>
+</CardGroup>
+
+## Adjustments
+
+Adjustments are manual entries that modify your revenue records. Every adjustment creates a corresponding revenue event, maintaining the integrity of the immutable ledger.
+
+### Adjustment Types
+
+| Type | Effect on Revenue | Revenue Event Created |
+|------|-------------------|----------------------|
+| `credit` | Increases net revenue | `adjustment_credit` |
+| `debit` | Decreases net revenue | `adjustment_debit` |
+| `chargeback` | Decreases net revenue | `chargeback` |
+
+Each adjustment includes:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Adjustment ID (prefixed `adj_`) |
+| `type` | `credit`, `debit`, or `chargeback` |
+| `amount` | Dollar amount |
+| `currency` | Currency code |
+| `reason` | Human-readable explanation (required) |
+| `checkout_id` | Linked checkout (optional) |
+| `subscription_id` | Linked subscription (optional) |
+| `customer_id` | Linked customer (optional) |
+| `revenue_event_id` | The revenue event created by this adjustment |
+
+<Warning>
+  Adjustments cannot be deleted. If you create an adjustment in error, create a counter-adjustment
+  (e.g., a debit to offset an incorrect credit). This preserves the full audit trail.
+</Warning>
+
+### Common Adjustment Scenarios
+
+<AccordionGroup>
+  <Accordion title="Goodwill credit">
+    A customer had a poor experience and you want to credit their account. Create a `credit`
+    adjustment with a clear reason for the audit trail.
+  </Accordion>
+  <Accordion title="Overpayment correction">
+    A customer overpaid on a checkout. Create a `credit` adjustment for the difference
+    and link it to the checkout and customer.
+  </Accordion>
+  <Accordion title="Disputed transaction">
+    A customer disputes a payment. Create a `chargeback` adjustment to record the dispute.
+    Link it to the original checkout for traceability.
+  </Accordion>
+  <Accordion title="Accounting correction">
+    An entry was recorded incorrectly. Create a `debit` or `credit` adjustment to correct
+    the error, with a reason explaining the correction.
+  </Accordion>
+</AccordionGroup>
+
+## CSV Export
+
+The accounting view supports CSV export for integration with external accounting systems. The export includes:
+
+- Period start and end dates
+- Gross revenue, fees, net revenue
+- Adjustment totals (credits, debits, chargebacks)
+- Adjusted net revenue
+- Event counts per type
+
+<Tip>
+  Use CSV exports for monthly reconciliation with your accounting software. The export format
+  is designed to be compatible with common accounting tools like QuickBooks, Xero, and
+  spreadsheet applications.
+</Tip>
+
+## Code Examples
+
+### List Revenue Events
+
+<CodeGroup>
+```bash curl
+curl "https://api.billing.io/api/revenue/events?limit=50" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript node.js
+const response = await fetch(
+  "https://api.billing.io/api/revenue/events?limit=50",
+  {
+    headers: {
+      Authorization: "Bearer YOUR_API_KEY",
+    },
+  }
+);
+
+const { data } = await response.json();
+// data: [
+//   {
+//     id: "rev_...",
+//     event_type: "checkout_confirmed",
+//     amount: 150.00,
+//     token: "USDT",
+//     chain: "tron",
+//     occurred_at: "2025-01-15T10:30:00Z"
+//   },
+//   ...
+// ]
+```
+</CodeGroup>
+
+### Get Accounting Summary
+
+<CodeGroup>
+```bash curl
+curl "https://api.billing.io/api/revenue/accounting?period=2025-01" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript node.js
+const response = await fetch(
+  "https://api.billing.io/api/revenue/accounting?period=2025-01",
+  {
+    headers: {
+      Authorization: "Bearer YOUR_API_KEY",
+    },
+  }
+);
+
+const summary = await response.json();
+// {
+//   period: "2025-01",
+//   gross_revenue: 12500.00,
+//   fees: 93.75,
+//   net_revenue: 12406.25,
+//   adjustments: {
+//     credits: 50.00,
+//     debits: 0.00,
+//     chargebacks: 200.00
+//   },
+//   adjusted_net: 12256.25,
+//   event_counts: {
+//     checkout_confirmed: 45,
+//     subscription_charged: 120,
+//     refund: 2,
+//     adjustment_credit: 1,
+//     chargeback: 1
+//   }
+// }
+```
+</CodeGroup>
+
+### Create an Adjustment
+
+<CodeGroup>
+```bash curl
+curl -X POST https://api.billing.io/api/revenue/adjustments \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "credit",
+    "amount": 25.00,
+    "currency": "USD",
+    "reason": "Goodwill credit for delayed checkout confirmation",
+    "customer_id": "cus_abc123def456",
+    "checkout_id": "chk_xyz789"
+  }'
+```
+
+```javascript node.js
+const response = await fetch("https://api.billing.io/api/revenue/adjustments", {
+  method: "POST",
+  headers: {
+    Authorization: "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    type: "credit",
+    amount: 25.0,
+    currency: "USD",
+    reason: "Goodwill credit for delayed checkout confirmation",
+    customer_id: "cus_abc123def456",
+    checkout_id: "chk_xyz789",
+  }),
+});
+
+const adjustment = await response.json();
+console.log(adjustment.id); // adj_a1b2c3d4e5f6...
+console.log(adjustment.revenue_event_id); // rev_... (auto-created)
+```
+</CodeGroup>
+
+### Create a Chargeback
+
+<CodeGroup>
+```bash curl
+curl -X POST https://api.billing.io/api/revenue/adjustments \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "chargeback",
+    "amount": 500.00,
+    "currency": "USD",
+    "reason": "Customer disputes transaction - investigating",
+    "customer_id": "cus_abc123def456",
+    "checkout_id": "chk_xyz789"
+  }'
+```
+
+```javascript node.js
+const response = await fetch("https://api.billing.io/api/revenue/adjustments", {
+  method: "POST",
+  headers: {
+    Authorization: "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    type: "chargeback",
+    amount: 500.0,
+    currency: "USD",
+    reason: "Customer disputes transaction - investigating",
+    customer_id: "cus_abc123def456",
+    checkout_id: "chk_xyz789",
+  }),
+});
+
+const adjustment = await response.json();
+console.log(adjustment.id); // adj_a1b2c3d4e5f6...
+```
+</CodeGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Always provide a reason" icon="message">
+    When creating adjustments, write clear, specific reasons. These become part of the
+    permanent audit trail and are invaluable during accounting reviews.
+  </Card>
+  <Card title="Link adjustments to resources" icon="link">
+    Always link adjustments to the relevant checkout, subscription, or customer.
+    This makes reconciliation and auditing significantly easier.
+  </Card>
+  <Card title="Export monthly" icon="download">
+    Set a recurring reminder to export your accounting data monthly. This ensures
+    your external accounting system stays in sync and simplifies year-end reporting.
+  </Card>
+  <Card title="Review discrepancies promptly" icon="magnifying-glass">
+    If the accounting view shows unexpected numbers, drill into the revenue timeline
+    to identify specific events. Address discrepancies before the period closes.
+  </Card>
+</CardGroup>

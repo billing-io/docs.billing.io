@@ -1,0 +1,150 @@
+---
+title: "Python"
+description: "Official billing.io SDK for Python"
+---
+
+The official billing.io SDK for Python 3.9+.
+
+<CardGroup cols={2}>
+  <Card title="PyPI" icon="python" href="https://pypi.org/project/billingio/">
+    billingio
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/billingio/billingio-python">
+    billingio/billingio-python
+  </Card>
+</CardGroup>
+
+## Installation
+
+```bash
+pip install billingio
+```
+
+## Quick Start
+
+```python
+from billingio import BillingIO
+
+billing = BillingIO(api_key="sk_live_...")
+
+checkout = billing.checkouts.create(
+    amount_usd=49.99,
+    chain="tron",
+    token="USDT",
+    metadata={"order_id": "ord_12345"},
+)
+
+print(checkout.checkout_id)
+print(checkout.deposit_address)
+```
+
+## Create a Checkout
+
+```python
+checkout = billing.checkouts.create(
+    amount_usd=100.00,
+    chain="arbitrum",
+    token="USDC",
+    metadata={
+        "customer_email": "alice@example.com",
+        "plan": "pro",
+    },
+)
+```
+
+## List with Pagination
+
+Fetch a single page:
+
+```python
+page = billing.checkouts.list(limit=10)
+for checkout in page.data:
+    print(checkout.checkout_id, checkout.status)
+```
+
+Auto-paginate through all results:
+
+```python
+from billingio import auto_paginate
+
+for checkout in auto_paginate(billing.checkouts.list):
+    print(checkout.checkout_id, checkout.status)
+```
+
+## Get Checkout Status
+
+```python
+status = billing.checkouts.get_status("chk_abc123")
+
+print(status.status)                  # "confirming"
+print(status.confirmations)            # 8
+print(status.required_confirmations)   # 19
+```
+
+## Webhook Signature Verification
+
+### Flask
+
+```python
+from flask import Flask, request
+from billingio import verify_webhook_signature
+
+app = Flask(__name__)
+
+
+@app.route("/webhooks/billing", methods=["POST"])
+def handle_webhook():
+    is_valid = verify_webhook_signature(
+        raw_body=request.get_data(as_text=True),
+        signature_header=request.headers["X-Billing-Signature"],
+        secret="whsec_...",
+    )
+
+    if not is_valid:
+        return "Invalid signature", 401
+
+    event = request.get_json()
+    print(event["type"])  # "checkout.completed"
+    return "OK", 200
+```
+
+### Django
+
+```python
+from django.http import HttpResponse, HttpResponseForbidden
+from billingio import verify_webhook_signature
+
+
+def billing_webhook(request):
+    is_valid = verify_webhook_signature(
+        raw_body=request.body.decode("utf-8"),
+        signature_header=request.headers["X-Billing-Signature"],
+        secret="whsec_...",
+    )
+
+    if not is_valid:
+        return HttpResponseForbidden("Invalid signature")
+
+    # process event...
+    return HttpResponse("OK")
+```
+
+## Error Handling
+
+```python
+from billingio import BillingIO, BillingIOError
+
+try:
+    billing.checkouts.create(amount_usd=-1, chain="tron", token="USDT")
+except BillingIOError as e:
+    print(e.status)   # 422
+    print(e.code)     # "validation_error"
+    print(e.message)  # "amount_usd must be positive"
+```
+
+| Error Type | Status | Description |
+|------------|--------|-------------|
+| `authentication_error` | 401 | Invalid or missing API key |
+| `not_found` | 404 | Resource doesn't exist |
+| `validation_error` | 422 | Invalid request parameters |
+| `rate_limit_error` | 429 | Too many requests |

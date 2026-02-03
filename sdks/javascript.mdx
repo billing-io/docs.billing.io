@@ -1,0 +1,144 @@
+---
+title: "JavaScript / TypeScript"
+description: "Official billing.io SDK for Node.js and TypeScript"
+---
+
+The official billing.io SDK for JavaScript and TypeScript. Works with Node.js 18+ and has zero external dependencies.
+
+<CardGroup cols={2}>
+  <Card title="npm" icon="npm" href="https://www.npmjs.com/package/@billing-io/sdk">
+    @billing-io/sdk
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/billing-io/sdk-js">
+    billing-io/sdk-js
+  </Card>
+</CardGroup>
+
+## Installation
+
+```bash
+npm install @billing-io/sdk
+```
+
+## Quick Start
+
+```typescript
+import BillingIO from "@billing-io/sdk";
+
+const billing = new BillingIO("sk_live_...");
+
+const checkout = await billing.checkouts.create({
+  amount_usd: 49.99,
+  chain: "tron",
+  token: "USDT",
+  metadata: { order_id: "ord_12345" },
+});
+
+console.log(checkout.checkout_id);
+console.log(checkout.deposit_address);
+```
+
+## Create a Checkout
+
+```typescript
+const checkout = await billing.checkouts.create({
+  amount_usd: 100.0,
+  chain: "arbitrum",
+  token: "USDC",
+  metadata: {
+    customer_email: "alice@example.com",
+    plan: "pro",
+  },
+});
+```
+
+## List with Auto-Pagination
+
+The SDK provides async iterators for automatic cursor-based pagination:
+
+```typescript
+for await (const checkout of billing.checkouts.list()) {
+  console.log(checkout.checkout_id, checkout.status);
+}
+```
+
+Or fetch a single page:
+
+```typescript
+const page = await billing.checkouts.list({ limit: 10 });
+console.log(page.data);
+console.log(page.cursor); // pass to next request
+```
+
+## Get Checkout Status
+
+```typescript
+const status = await billing.checkouts.getStatus("chk_abc123");
+
+console.log(status.status);                // "confirming"
+console.log(status.confirmations);          // 8
+console.log(status.required_confirmations); // 19
+```
+
+## Webhook Signature Verification
+
+Verify incoming webhook payloads using the built-in helper:
+
+```typescript
+import { verifyWebhookSignature } from "@billing-io/sdk";
+
+const isValid = verifyWebhookSignature(
+  rawBody,                                    // raw request body string
+  request.headers["x-billing-signature"],     // signature header
+  "whsec_..."                                 // your webhook secret
+);
+
+if (!isValid) {
+  return new Response("Invalid signature", { status: 401 });
+}
+```
+
+<Note>
+The SDK uses the Web Crypto API for signature verification, so it works in Node.js, Deno, Cloudflare Workers, and any runtime that supports `crypto.subtle`.
+</Note>
+
+## Idempotency
+
+Pass an idempotency key to safely retry requests:
+
+```typescript
+const checkout = await billing.checkouts.create(
+  { amount_usd: 49.99, chain: "tron", token: "USDT" },
+  { idempotencyKey: "order_12345" }
+);
+```
+
+## Error Handling
+
+All API errors throw a typed `BillingIOError`:
+
+```typescript
+import BillingIO, { BillingIOError } from "@billing-io/sdk";
+
+try {
+  await billing.checkouts.create({
+    amount_usd: -1,
+    chain: "tron",
+    token: "USDT",
+  });
+} catch (err) {
+  if (err instanceof BillingIOError) {
+    console.log(err.status);  // 422
+    console.log(err.code);    // "validation_error"
+    console.log(err.message); // "amount_usd must be positive"
+  }
+}
+```
+
+## TypeScript Support
+
+The SDK ships with full TypeScript types generated from the billing.io OpenAPI spec. All request and response types are exported:
+
+```typescript
+import type { Checkout, CreateCheckoutParams } from "@billing-io/sdk";
+```

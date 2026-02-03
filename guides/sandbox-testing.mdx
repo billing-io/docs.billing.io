@@ -1,0 +1,583 @@
+---
+title: "Sandbox Testing"
+description: "Test your integration without real funds"
+---
+
+## Overview
+
+The billing.io sandbox is a full-featured testing environment that mirrors production. You can create checkouts, simulate payments, test subscriptions, and validate webhook handlers -- all without real crypto or real money.
+
+Every operation in sandbox is isolated from your live data. Sandbox resources have their own `environment: "sandbox"` flag and cannot interact with live resources.
+
+---
+
+## Getting Sandbox API Keys
+
+Sandbox API keys have the prefix `sk_test_`. You can find them in your dashboard at **Developers > API Keys**.
+
+```
+sk_test_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+```
+
+Use this key in the `Authorization` header for all sandbox requests:
+
+```bash
+curl https://api.billing.io/v1/checkouts \
+  -H "Authorization: Bearer sk_test_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+```
+
+<Info>
+  Sandbox keys are available on **all plans**, including the Free plan. You do
+  not need a paid plan to test your integration.
+</Info>
+
+---
+
+## Sandbox vs Live Environment
+
+| Aspect | Sandbox (`sk_test_`) | Live (`sk_live_`) |
+|--------|---------------------|-------------------|
+| Real crypto | No | Yes |
+| On-chain transactions | Simulated | Real blockchain verification |
+| Webhook deliveries | Full delivery with signatures | Full delivery with signatures |
+| API rate limits | Same as live | Based on your plan |
+| Data isolation | Completely separate | Completely separate |
+| Payment simulation | `POST /sandbox/simulate-payment` | Real on-chain payments |
+| HTTP webhooks | Allowed (for local dev) | HTTPS only |
+| Chain-watcher | Simulated confirmations | Real block confirmations |
+
+<Note>
+  Sandbox and live data are fully isolated. Customers, checkouts, subscriptions,
+  and all other resources created with `sk_test_` keys exist only in the sandbox
+  environment. They will not appear when using `sk_live_` keys.
+</Note>
+
+---
+
+## Creating Test Checkouts
+
+Create checkouts in sandbox exactly as you would in production:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/checkouts \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
+  -d '{
+    "amount_usd": 25.00,
+    "chain": "tron",
+    "token": "USDT",
+    "metadata": {
+      "order_id": "test_ord_001",
+      "test": "true"
+    }
+  }'
+```
+
+```javascript Node.js
+const response = await fetch("https://api.billing.io/v1/checkouts", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer sk_test_xxx",
+    "Content-Type": "application/json",
+    "Idempotency-Key": crypto.randomUUID(),
+  },
+  body: JSON.stringify({
+    amount_usd: 25.00,
+    chain: "tron",
+    token: "USDT",
+    metadata: {
+      order_id: "test_ord_001",
+      test: "true",
+    },
+  }),
+});
+
+const checkout = await response.json();
+console.log(checkout.checkout_id); // "co_..."
+console.log(checkout.status);      // "pending"
+```
+
+</CodeGroup>
+
+The checkout is created with `status: "pending"` and a test deposit address. In sandbox, no real crypto needs to be sent -- use the simulation endpoint instead.
+
+---
+
+## Simulating Payments
+
+The sandbox provides a dedicated endpoint to simulate payment confirmation for a checkout. This triggers the same flow as a real on-chain payment: the checkout moves through `detected` -> `confirming` -> `confirmed`, and all associated webhook events fire.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/sandbox/simulate-payment \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkout_id": "co_9a8b7c6d5e4f"
+  }'
+```
+
+```javascript Node.js
+async function simulatePayment(checkoutId) {
+  const response = await fetch(
+    "https://api.billing.io/v1/sandbox/simulate-payment",
+    {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer sk_test_xxx",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        checkout_id: checkoutId,
+      }),
+    }
+  );
+
+  const result = await response.json();
+  console.log("Payment simulated:", result);
+  return result;
+}
+
+// Create a checkout, then simulate its payment
+const checkout = await createCheckout({ amount_usd: 25.00, chain: "tron", token: "USDT" });
+await simulatePayment(checkout.checkout_id);
+```
+
+```python Python
+import requests
+
+def simulate_payment(checkout_id: str) -> dict:
+    response = requests.post(
+        "https://api.billing.io/v1/sandbox/simulate-payment",
+        headers={
+            "Authorization": "Bearer sk_test_xxx",
+            "Content-Type": "application/json",
+        },
+        json={"checkout_id": checkout_id},
+    )
+    return response.json()
+
+# Create a checkout, then simulate its payment
+checkout = create_checkout(amount_usd=25.00, chain="tron", token="USDT")
+simulate_payment(checkout["checkout_id"])
+```
+
+</CodeGroup>
+
+<Warning>
+  The `POST /sandbox/simulate-payment` endpoint is **only available with
+  sandbox API keys** (`sk_test_`). Calling it with a live key returns a
+  `400` error.
+</Warning>
+
+### What happens when you simulate a payment
+
+1. The checkout status transitions: `pending` -> `detected` -> `confirming` -> `confirmed`
+2. A simulated `tx_hash` is generated
+3. Webhook events fire in order: `checkout.payment_detected`, `checkout.confirming`, `checkout.completed`
+4. If the checkout is linked to a subscription renewal, the renewal is marked as `paid` and the subscription period advances
+5. A revenue event is created
+
+---
+
+## Testing Webhook Deliveries
+
+### Set up a local webhook receiver
+
+For local development, use a tunnel service to expose your local server:
+
+<Tabs>
+  <Tab title="ngrok">
+    ```bash
+    # Start your local server
+    npm run dev  # Runs on port 3000
+
+    # In another terminal, start ngrok
+    ngrok http 3000
+    ```
+
+    ngrok gives you a public URL like `https://abc123.ngrok.io`. Register this as your webhook endpoint.
+  </Tab>
+  <Tab title="localtunnel">
+    ```bash
+    npx localtunnel --port 3000
+    ```
+  </Tab>
+  <Tab title="Cloudflare Tunnel">
+    ```bash
+    cloudflared tunnel --url http://localhost:3000
+    ```
+  </Tab>
+</Tabs>
+
+### Register a sandbox webhook endpoint
+
+```bash
+curl -X POST https://api.billing.io/v1/webhooks \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://abc123.ngrok.io/webhooks/billing",
+    "events": [
+      "checkout.created",
+      "checkout.payment_detected",
+      "checkout.confirming",
+      "checkout.completed",
+      "checkout.expired"
+    ],
+    "description": "Local development testing"
+  }'
+```
+
+<Tip>
+  Sandbox webhooks allow **HTTP** URLs for local development convenience.
+  In production, only HTTPS endpoints are accepted.
+</Tip>
+
+### Trigger webhook events
+
+```bash
+# 1. Create a test checkout
+CHECKOUT=$(curl -s -X POST https://api.billing.io/v1/checkouts \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"amount_usd": 10.00, "chain": "tron", "token": "USDT"}')
+
+CHECKOUT_ID=$(echo $CHECKOUT | jq -r '.checkout_id')
+echo "Created checkout: $CHECKOUT_ID"
+
+# 2. Simulate payment -- this fires checkout.completed webhook
+curl -X POST https://api.billing.io/v1/sandbox/simulate-payment \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d "{\"checkout_id\": \"$CHECKOUT_ID\"}"
+```
+
+Your local webhook handler should receive the events. Verify that:
+- The `X-Billing-Signature` header is present
+- Your signature verification code validates correctly
+- Your handler processes the event and responds with `200`
+
+---
+
+## Testing Subscriptions in Sandbox
+
+Test the full subscription lifecycle in sandbox:
+
+### 1. Create test resources
+
+```bash
+# Create a test customer
+curl -X POST https://api.billing.io/v1/customers \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "name": "Test Customer"
+  }'
+
+# Create a test plan
+curl -X POST https://api.billing.io/v1/subscriptions/plans \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test Pro Plan",
+    "amount_usd": 9.99,
+    "interval": "monthly",
+    "trial_days": 0,
+    "token": "USDT",
+    "chain": "tron"
+  }'
+
+# Create a subscription
+curl -X POST https://api.billing.io/v1/subscriptions \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_...",
+    "plan_id": "plan_..."
+  }'
+```
+
+### 2. Test renewal payments
+
+When a subscription renewal creates a checkout, simulate the payment:
+
+```bash
+# List renewals to find the checkout
+curl "https://api.billing.io/v1/subscriptions/renewals?subscription_id=sub_..." \
+  -H "Authorization: Bearer sk_test_xxx"
+
+# Simulate the renewal payment
+curl -X POST https://api.billing.io/v1/sandbox/simulate-payment \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"checkout_id": "co_..."}'
+```
+
+### 3. Test entitlement checks
+
+```bash
+curl "https://api.billing.io/v1/subscriptions/entitlements/check?customer_id=cus_...&feature_key=api_requests" \
+  -H "Authorization: Bearer sk_test_xxx"
+```
+
+### 4. Test lifecycle transitions
+
+```bash
+# Pause
+curl -X PATCH "https://api.billing.io/v1/subscriptions/sub_..." \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "pause"}'
+
+# Resume
+curl -X PATCH "https://api.billing.io/v1/subscriptions/sub_..." \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "resume"}'
+
+# Cancel at period end
+curl -X PATCH "https://api.billing.io/v1/subscriptions/sub_..." \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "cancel"}'
+```
+
+---
+
+## Testing Payouts in Sandbox
+
+Test the payout orchestration flow without sending real crypto:
+
+```bash
+# 1. Create a payout intent
+curl -X POST https://api.billing.io/v1/payouts \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient_address": "TXrkA1b2C3d4E5f6G7h8I9j0K1l2M3n4",
+    "chain": "tron",
+    "token": "USDT",
+    "amount": 100.00,
+    "currency": "USD",
+    "description": "Test payout"
+  }'
+
+# 2. Approve
+curl -X PATCH "https://api.billing.io/v1/payouts/po_..." \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "approved"}'
+
+# 3. Submit a test tx hash (any string works in sandbox)
+curl -X POST "https://api.billing.io/v1/payouts/po_.../execute" \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"tx_hash": "test_tx_abc123def456"}'
+
+# 4. Check settlements
+curl "https://api.billing.io/v1/payouts/settlements?payout_intent_id=po_..." \
+  -H "Authorization: Bearer sk_test_xxx"
+
+# 5. Check reconciliation
+curl "https://api.billing.io/v1/payouts/reconciliation" \
+  -H "Authorization: Bearer sk_test_xxx"
+```
+
+---
+
+## End-to-End Test Script
+
+Here is a complete Node.js script that tests the full checkout flow:
+
+<CodeGroup>
+
+```javascript Node.js
+const API_BASE = "https://api.billing.io/v1";
+const API_KEY = "sk_test_your_key_here";
+
+async function api(method, path, body = null) {
+  const options = {
+    method,
+    headers: {
+      "Authorization": `Bearer ${API_KEY}`,
+      "Content-Type": "application/json",
+    },
+  };
+  if (body) options.body = JSON.stringify(body);
+
+  const response = await fetch(`${API_BASE}${path}`, options);
+  return response.json();
+}
+
+async function runE2ETest() {
+  console.log("=== billing.io Sandbox E2E Test ===\n");
+
+  // 1. Create a checkout
+  console.log("1. Creating checkout...");
+  const checkout = await api("POST", "/checkouts", {
+    amount_usd: 42.00,
+    chain: "tron",
+    token: "USDT",
+    metadata: { test_run: "e2e_001" },
+  });
+  console.log(`   Checkout created: ${checkout.checkout_id} (${checkout.status})\n`);
+
+  // 2. Check initial status
+  console.log("2. Checking status...");
+  const status1 = await api("GET", `/checkouts/${checkout.checkout_id}/status`);
+  console.log(`   Status: ${status1.status}\n`);
+
+  // 3. Simulate payment
+  console.log("3. Simulating payment...");
+  await api("POST", "/sandbox/simulate-payment", {
+    checkout_id: checkout.checkout_id,
+  });
+  console.log("   Payment simulated.\n");
+
+  // 4. Verify final status
+  console.log("4. Verifying final status...");
+  const status2 = await api("GET", `/checkouts/${checkout.checkout_id}/status`);
+  console.log(`   Status: ${status2.status}`);
+  console.log(`   TX Hash: ${status2.tx_hash}`);
+  console.log(`   Confirmations: ${status2.confirmations}/${status2.required_confirmations}`);
+  console.log(`   Confirmed at: ${status2.confirmed_at}\n`);
+
+  // 5. Verify via full checkout object
+  console.log("5. Fetching full checkout...");
+  const finalCheckout = await api("GET", `/checkouts/${checkout.checkout_id}`);
+  console.log(`   Final status: ${finalCheckout.status}`);
+  console.log(`   Amount: $${finalCheckout.amount_usd} (${finalCheckout.amount_atomic} atomic)\n`);
+
+  console.log("=== Test complete ===");
+}
+
+runE2ETest().catch(console.error);
+```
+
+```python Python
+import requests
+import json
+
+API_BASE = "https://api.billing.io/v1"
+API_KEY = "sk_test_your_key_here"
+
+def api(method: str, path: str, body: dict = None) -> dict:
+    response = requests.request(
+        method,
+        f"{API_BASE}{path}",
+        headers={
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=body,
+    )
+    return response.json()
+
+def run_e2e_test():
+    print("=== billing.io Sandbox E2E Test ===\n")
+
+    # 1. Create a checkout
+    print("1. Creating checkout...")
+    checkout = api("POST", "/checkouts", {
+        "amount_usd": 42.00,
+        "chain": "tron",
+        "token": "USDT",
+        "metadata": {"test_run": "e2e_001"},
+    })
+    print(f"   Checkout created: {checkout['checkout_id']} ({checkout['status']})\n")
+
+    # 2. Check initial status
+    print("2. Checking status...")
+    status1 = api("GET", f"/checkouts/{checkout['checkout_id']}/status")
+    print(f"   Status: {status1['status']}\n")
+
+    # 3. Simulate payment
+    print("3. Simulating payment...")
+    api("POST", "/sandbox/simulate-payment", {
+        "checkout_id": checkout["checkout_id"],
+    })
+    print("   Payment simulated.\n")
+
+    # 4. Verify final status
+    print("4. Verifying final status...")
+    status2 = api("GET", f"/checkouts/{checkout['checkout_id']}/status")
+    print(f"   Status: {status2['status']}")
+    print(f"   TX Hash: {status2['tx_hash']}")
+    print(f"   Confirmations: {status2['confirmations']}/{status2['required_confirmations']}")
+    print(f"   Confirmed at: {status2['confirmed_at']}\n")
+
+    print("=== Test complete ===")
+
+if __name__ == "__main__":
+    run_e2e_test()
+```
+
+</CodeGroup>
+
+---
+
+## Moving to Production Checklist
+
+Before switching from sandbox to live, verify the following:
+
+<Steps>
+  <Step title="Upgrade to a paid plan">
+    Sandbox is free, but live payments require at least the **Starter** plan.
+    Upgrade at **Account > Plans & Usage** in the dashboard.
+  </Step>
+
+  <Step title="Switch to live API keys">
+    Replace `sk_test_` keys with `sk_live_` keys in your environment variables.
+    Never commit API keys to source control.
+  </Step>
+
+  <Step title="Configure live payment methods">
+    Create payment methods with your real wallet addresses. Ensure you control
+    the private keys for these wallets.
+  </Step>
+
+  <Step title="Register live webhook endpoints">
+    Create new webhook endpoints for your production URLs. Ensure they use HTTPS.
+    Store the webhook signing secret securely.
+  </Step>
+
+  <Step title="Verify signature verification is working">
+    Confirm your webhook handler correctly verifies `X-Billing-Signature` headers
+    and rejects invalid signatures.
+  </Step>
+
+  <Step title="Implement idempotency">
+    Ensure all `POST /checkouts` and other create requests include an
+    `Idempotency-Key` header. See the [Idempotency](/guides/idempotency) guide.
+  </Step>
+
+  <Step title="Handle all terminal states">
+    Your integration should handle `confirmed`, `expired`, and `failed` checkout
+    statuses. Test each path in sandbox before going live.
+  </Step>
+
+  <Step title="Set up monitoring">
+    Monitor your webhook endpoint uptime, API error rates, and checkout
+    conversion rates. Check the **Developers > Event Log** page regularly.
+  </Step>
+
+  <Step title="Remove sandbox simulation calls">
+    Ensure no code paths call `POST /sandbox/simulate-payment` with live keys.
+    This endpoint rejects live API keys.
+  </Step>
+</Steps>
+
+---
+
+## Next Steps
+
+- [Accept your first live payment](/guides/accept-payments)
+- [Set up webhooks](/guides/webhooks) for real-time notifications
+- [Implement idempotency](/guides/idempotency) for safe retries
+- [Set up subscription billing](/guides/subscription-billing) for recurring revenue

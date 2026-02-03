@@ -1,0 +1,178 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "billing.io",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#111111",
+    "light": "#6366f1",
+    "dark": "#111111"
+  },
+  "topbarCtaButton": {
+    "name": "Dashboard",
+    "url": "https://app.billing.io/dashboard"
+  },
+  "tabs": [
+    { "name": "API Reference", "url": "api-reference" },
+    { "name": "SDKs", "url": "sdks" }
+  ],
+  "anchors": [
+    { "name": "GitHub", "icon": "github", "url": "https://github.com/billing-io" },
+    { "name": "Community", "icon": "discord", "url": "https://discord.gg/billing-io" }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "introduction",
+        "what-is-non-custodial",
+        "quickstart",
+        "concepts/architecture"
+      ]
+    },
+    {
+      "group": "Core Concepts",
+      "pages": [
+        "concepts/payment-methods",
+        "concepts/subscriptions",
+        "concepts/payouts",
+        "concepts/revenue"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/accept-payments",
+        "guides/subscription-billing",
+        "guides/payout-orchestration",
+        "guides/webhooks",
+        "guides/sandbox-testing",
+        "guides/idempotency"
+      ]
+    },
+    {
+      "group": "Overview",
+      "pages": [
+        "api-reference/authentication",
+        "api-reference/errors",
+        "api-reference/pagination"
+      ]
+    },
+    {
+      "group": "Checkouts",
+      "pages": [
+        "api-reference/checkouts/create",
+        "api-reference/checkouts/list",
+        "api-reference/checkouts/get",
+        "api-reference/checkouts/get-status"
+      ]
+    },
+    {
+      "group": "Customers",
+      "pages": [
+        "api-reference/customers/create",
+        "api-reference/customers/list",
+        "api-reference/customers/get",
+        "api-reference/customers/update"
+      ]
+    },
+    {
+      "group": "Payment Methods",
+      "pages": [
+        "api-reference/payment-methods/create",
+        "api-reference/payment-methods/list",
+        "api-reference/payment-methods/update",
+        "api-reference/payment-methods/disable",
+        "api-reference/payment-methods/set-default"
+      ]
+    },
+    {
+      "group": "Payment Links",
+      "pages": [
+        "api-reference/payment-links/create",
+        "api-reference/payment-links/list"
+      ]
+    },
+    {
+      "group": "Subscriptions",
+      "pages": [
+        "api-reference/subscriptions/create-plan",
+        "api-reference/subscriptions/list-plans",
+        "api-reference/subscriptions/update-plan",
+        "api-reference/subscriptions/create",
+        "api-reference/subscriptions/list",
+        "api-reference/subscriptions/update",
+        "api-reference/subscriptions/list-renewals",
+        "api-reference/subscriptions/retry-renewal",
+        "api-reference/subscriptions/list-entitlements",
+        "api-reference/subscriptions/create-entitlement",
+        "api-reference/subscriptions/update-entitlement",
+        "api-reference/subscriptions/delete-entitlement",
+        "api-reference/subscriptions/check-entitlement"
+      ]
+    },
+    {
+      "group": "Payouts",
+      "pages": [
+        "api-reference/payouts/create",
+        "api-reference/payouts/list",
+        "api-reference/payouts/update",
+        "api-reference/payouts/execute",
+        "api-reference/payouts/list-settlements",
+        "api-reference/payouts/reconciliation"
+      ]
+    },
+    {
+      "group": "Revenue",
+      "pages": [
+        "api-reference/revenue/list-events",
+        "api-reference/revenue/accounting",
+        "api-reference/revenue/list-adjustments",
+        "api-reference/revenue/create-adjustment"
+      ]
+    },
+    {
+      "group": "Webhooks",
+      "pages": [
+        "api-reference/webhooks/create",
+        "api-reference/webhooks/list",
+        "api-reference/webhooks/get",
+        "api-reference/webhooks/delete"
+      ]
+    },
+    {
+      "group": "Events",
+      "pages": [
+        "api-reference/events/list",
+        "api-reference/events/get"
+      ]
+    },
+    {
+      "group": "SDKs",
+      "pages": [
+        "sdks/javascript",
+        "sdks/python",
+        "sdks/go",
+        "sdks/react",
+        "sdks/ruby",
+        "sdks/java",
+        "sdks/billing-js"
+      ]
+    }
+  ],
+  "openapi": ["./openapi/v1.yaml"],
+  "api": {
+    "baseUrl": "https://api.billing.io/v1",
+    "auth": {
+      "method": "bearer"
+    }
+  },
+  "footerSocials": {
+    "github": "https://github.com/billing-io",
+    "discord": "https://discord.gg/billing-io",
+    "twitter": "https://twitter.com/billing_io"
+  }
+}

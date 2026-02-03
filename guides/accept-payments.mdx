@@ -1,0 +1,539 @@
+---
+title: "Accept Crypto Payments"
+description: "End-to-end guide to accepting your first crypto payment"
+---
+
+## Overview
+
+This guide walks you through accepting your first crypto payment on billing.io. By the end, you will have:
+
+1. Configured a payment method (chain + token + wallet)
+2. Created a checkout session
+3. Redirected your customer to pay
+4. Verified the payment via polling or webhook
+
+billing.io is **non-custodial** -- crypto goes directly to your wallet. billing.io never holds your funds.
+
+<Info>
+  **Prerequisites** -- You need a billing.io account with an API key. Sandbox keys
+  (prefixed `sk_test_`) work for testing without real funds. See the
+  [Sandbox Testing](/guides/sandbox-testing) guide to get started.
+</Info>
+
+---
+
+## Step 1: Create a Payment Method
+
+A **payment method** defines how you receive crypto: which blockchain, which token, and which wallet address. You must create at least one before you can accept payments.
+
+<Steps>
+  <Step title="Register your wallet">
+    Add a wallet address to your organization through the dashboard at **Settings > Wallets**, or use the wallets API. Note the returned `wallet_id`.
+  </Step>
+
+  <Step title="Create a payment method">
+    Attach a chain + token pair to your wallet. This becomes the receiving rail for checkouts.
+
+    <CodeGroup>
+
+    ```bash cURL
+    curl -X POST https://api.billing.io/v1/payment-methods \
+      -H "Authorization: Bearer sk_live_xxx" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "wallet_id": "wal_a1b2c3d4e5f6",
+        "chain": "tron",
+        "token": "USDT",
+        "display_name": "USDT on Tron (Primary)",
+        "required_confirmations": 19,
+        "is_default": true
+      }'
+    ```
+
+    ```javascript Node.js
+    const response = await fetch("https://api.billing.io/v1/payment-methods", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer sk_live_xxx",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        wallet_id: "wal_a1b2c3d4e5f6",
+        chain: "tron",
+        token: "USDT",
+        display_name: "USDT on Tron (Primary)",
+        required_confirmations: 19,
+        is_default: true,
+      }),
+    });
+
+    const paymentMethod = await response.json();
+    console.log(paymentMethod.id); // "pm_..."
+    ```
+
+    ```python Python
+    import requests
+
+    response = requests.post(
+        "https://api.billing.io/v1/payment-methods",
+        headers={
+            "Authorization": "Bearer sk_live_xxx",
+            "Content-Type": "application/json",
+        },
+        json={
+            "wallet_id": "wal_a1b2c3d4e5f6",
+            "chain": "tron",
+            "token": "USDT",
+            "display_name": "USDT on Tron (Primary)",
+            "required_confirmations": 19,
+            "is_default": True,
+        },
+    )
+
+    payment_method = response.json()
+    print(payment_method["id"])  # "pm_..."
+    ```
+
+    </CodeGroup>
+
+    The response returns a payment method object:
+
+    ```json
+    {
+      "id": "pm_8f3a1b2c4d5e6f7a",
+      "org_id": "org_...",
+      "wallet_id": "wal_a1b2c3d4e5f6",
+      "chain": "tron",
+      "token": "USDT",
+      "display_name": "USDT on Tron (Primary)",
+      "status": "active",
+      "is_default": true,
+      "required_confirmations": 19,
+      "min_amount_usd": null,
+      "max_amount_usd": null,
+      "environment": "live",
+      "created_at": "2025-06-15T10:30:00Z",
+      "updated_at": "2025-06-15T10:30:00Z"
+    }
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  **Supported chains and tokens:**
+  - **Tron** -- USDT, USDC
+  - **Arbitrum** -- USDT, USDC
+  - **Base** -- USDT, USDC
+
+  You can create multiple payment methods for different chain/token combinations
+  and set one as the default.
+</Tip>
+
+---
+
+## Step 2: Create a Checkout
+
+A **checkout** is a single payment session. It generates a deposit address that your customer sends crypto to. Checkouts expire after a configurable TTL (default: 30 minutes).
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/checkouts \
+  -H "Authorization: Bearer sk_live_xxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
+  -d '{
+    "amount_usd": 49.99,
+    "chain": "tron",
+    "token": "USDT",
+    "expires_in_seconds": 1800,
+    "metadata": {
+      "order_id": "ord_12345",
+      "customer_email": "user@example.com"
+    }
+  }'
+```
+
+```javascript Node.js
+const response = await fetch("https://api.billing.io/v1/checkouts", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer sk_live_xxx",
+    "Content-Type": "application/json",
+    "Idempotency-Key": "550e8400-e29b-41d4-a716-446655440000",
+  },
+  body: JSON.stringify({
+    amount_usd: 49.99,
+    chain: "tron",
+    token: "USDT",
+    expires_in_seconds: 1800,
+    metadata: {
+      order_id: "ord_12345",
+      customer_email: "user@example.com",
+    },
+  }),
+});
+
+const checkout = await response.json();
+console.log(checkout.checkout_id);     // "co_9a8b7c6d5e4f"
+console.log(checkout.deposit_address); // "TXrk...abc"
+```
+
+```python Python
+import requests
+import uuid
+
+response = requests.post(
+    "https://api.billing.io/v1/checkouts",
+    headers={
+        "Authorization": "Bearer sk_live_xxx",
+        "Content-Type": "application/json",
+        "Idempotency-Key": str(uuid.uuid4()),
+    },
+    json={
+        "amount_usd": 49.99,
+        "chain": "tron",
+        "token": "USDT",
+        "expires_in_seconds": 1800,
+        "metadata": {
+            "order_id": "ord_12345",
+            "customer_email": "user@example.com",
+        },
+    },
+)
+
+checkout = response.json()
+print(checkout["checkout_id"])      # "co_9a8b7c6d5e4f"
+print(checkout["deposit_address"])  # "TXrk...abc"
+```
+
+</CodeGroup>
+
+The API returns the full checkout object including a `deposit_address` for the customer to pay:
+
+```json
+{
+  "checkout_id": "co_9a8b7c6d5e4f",
+  "deposit_address": "TXrkA1b2C3d4E5f6G7h8I9j0K1l2M3n4",
+  "chain": "tron",
+  "token": "USDT",
+  "amount_usd": 49.99,
+  "amount_atomic": "49990000",
+  "status": "pending",
+  "tx_hash": null,
+  "confirmations": 0,
+  "required_confirmations": 19,
+  "expires_at": "2025-06-15T11:00:00Z",
+  "detected_at": null,
+  "confirmed_at": null,
+  "created_at": "2025-06-15T10:30:00Z",
+  "metadata": {
+    "order_id": "ord_12345",
+    "customer_email": "user@example.com"
+  }
+}
+```
+
+<Note>
+  **Idempotency** -- Always include an `Idempotency-Key` header (UUID format)
+  when creating checkouts. If your request is retried (e.g., due to a network
+  timeout), billing.io returns the original checkout instead of creating a
+  duplicate. Keys expire after **24 hours**. See the
+  [Idempotency](/guides/idempotency) guide for details.
+</Note>
+
+---
+
+## Step 3: Redirect the Customer
+
+After creating a checkout, direct your customer to pay. You have two options:
+
+### Option A: Hosted checkout page
+
+Redirect the customer to the billing.io hosted checkout page:
+
+```
+https://pay.billing.io/checkout/{checkout_id}
+```
+
+This page shows the deposit address, QR code, amount, countdown timer, and live status updates.
+
+### Option B: Embed in your UI
+
+Use the checkout data from the API response to build your own payment UI. Display:
+
+- The `deposit_address` for the customer to send crypto to
+- The `amount_atomic` (token amount in smallest unit) or `amount_usd`
+- A QR code encoding the deposit address
+- A countdown timer based on `expires_at`
+
+---
+
+## Step 4: Monitor Payment Status
+
+Once the customer sends crypto, the checkout moves through these statuses:
+
+```
+pending -> detected -> confirming -> confirmed
+                                  \-> expired
+                                  \-> failed
+```
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Waiting for payment. No transaction detected yet. |
+| `detected` | Transaction seen on-chain but not yet confirmed. |
+| `confirming` | Block confirmations in progress. |
+| `confirmed` | Payment fully confirmed. This is a terminal state. |
+| `expired` | Checkout TTL exceeded without payment. Terminal state. |
+| `failed` | Unrecoverable error. Terminal state. |
+
+### Option A: Poll for status
+
+Use the lightweight status endpoint for efficient polling. It returns a `polling_interval_ms` hint.
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.billing.io/v1/checkouts/co_9a8b7c6d5e4f/status \
+  -H "Authorization: Bearer sk_live_xxx"
+```
+
+```javascript Node.js
+async function pollCheckoutStatus(checkoutId) {
+  let resolved = false;
+
+  while (!resolved) {
+    const response = await fetch(
+      `https://api.billing.io/v1/checkouts/${checkoutId}/status`,
+      {
+        headers: { "Authorization": "Bearer sk_live_xxx" },
+      }
+    );
+
+    const status = await response.json();
+    console.log(`Status: ${status.status}, Confirmations: ${status.confirmations}/${status.required_confirmations}`);
+
+    if (["confirmed", "expired", "failed"].includes(status.status)) {
+      resolved = true;
+      return status;
+    }
+
+    // Use the server-suggested polling interval
+    const interval = status.polling_interval_ms || 2000;
+    await new Promise((resolve) => setTimeout(resolve, interval));
+  }
+}
+
+const finalStatus = await pollCheckoutStatus("co_9a8b7c6d5e4f");
+```
+
+```python Python
+import requests
+import time
+
+def poll_checkout_status(checkout_id: str) -> dict:
+    terminal_statuses = {"confirmed", "expired", "failed"}
+
+    while True:
+        response = requests.get(
+            f"https://api.billing.io/v1/checkouts/{checkout_id}/status",
+            headers={"Authorization": "Bearer sk_live_xxx"},
+        )
+        status = response.json()
+        print(f"Status: {status['status']}, Confirmations: {status['confirmations']}/{status['required_confirmations']}")
+
+        if status["status"] in terminal_statuses:
+            return status
+
+        # Use the server-suggested polling interval
+        interval_ms = status.get("polling_interval_ms", 2000)
+        time.sleep(interval_ms / 1000)
+
+final_status = poll_checkout_status("co_9a8b7c6d5e4f")
+```
+
+</CodeGroup>
+
+The status response looks like:
+
+```json
+{
+  "checkout_id": "co_9a8b7c6d5e4f",
+  "status": "confirming",
+  "tx_hash": "abc123def456...",
+  "confirmations": 12,
+  "required_confirmations": 19,
+  "detected_at": "2025-06-15T10:35:00Z",
+  "confirmed_at": null,
+  "polling_interval_ms": 2000
+}
+```
+
+### Option B: Use webhooks (recommended)
+
+Webhooks push events to your server in real time, so you do not need to poll. See the [Webhooks](/guides/webhooks) guide for full setup instructions.
+
+---
+
+## Step 5: Handle the checkout.completed Event
+
+When a checkout is fully confirmed on-chain, billing.io fires a `checkout.completed` webhook event. This is the signal to fulfill the order.
+
+### Full webhook payload
+
+```json
+{
+  "event_id": "evt_7f8a9b0c1d2e3f4a",
+  "type": "checkout.completed",
+  "checkout_id": "co_9a8b7c6d5e4f",
+  "data": {
+    "checkout_id": "co_9a8b7c6d5e4f",
+    "deposit_address": "TXrkA1b2C3d4E5f6G7h8I9j0K1l2M3n4",
+    "chain": "tron",
+    "token": "USDT",
+    "amount_usd": 49.99,
+    "amount_atomic": "49990000",
+    "status": "confirmed",
+    "tx_hash": "abc123def456789abc123def456789abc123def456789abc123def456789abcd",
+    "confirmations": 19,
+    "required_confirmations": 19,
+    "expires_at": "2025-06-15T11:00:00Z",
+    "detected_at": "2025-06-15T10:35:00Z",
+    "confirmed_at": "2025-06-15T10:42:00Z",
+    "created_at": "2025-06-15T10:30:00Z",
+    "metadata": {
+      "order_id": "ord_12345",
+      "customer_email": "user@example.com"
+    }
+  },
+  "created_at": "2025-06-15T10:42:00Z"
+}
+```
+
+### Handling the event in your server
+
+<CodeGroup>
+
+```javascript Node.js (Express)
+const crypto = require("crypto");
+
+app.post("/webhooks/billing", express.raw({ type: "application/json" }), (req, res) => {
+  // 1. Verify the signature (see Webhooks guide for details)
+  const signature = req.headers["x-billing-signature"];
+  // ... verification logic ...
+
+  // 2. Parse the event
+  const event = JSON.parse(req.body);
+
+  // 3. Handle the event
+  switch (event.type) {
+    case "checkout.completed":
+      const checkout = event.data;
+      const orderId = checkout.metadata.order_id;
+
+      // Fulfill the order in your system
+      await fulfillOrder(orderId, {
+        tx_hash: checkout.tx_hash,
+        amount_usd: checkout.amount_usd,
+        chain: checkout.chain,
+        token: checkout.token,
+        confirmed_at: checkout.confirmed_at,
+      });
+      break;
+
+    case "checkout.expired":
+      // Handle expired checkout (e.g., release inventory)
+      await handleExpiredCheckout(event.data.metadata.order_id);
+      break;
+
+    case "checkout.failed":
+      // Handle failure
+      await handleFailedCheckout(event.data.metadata.order_id);
+      break;
+  }
+
+  // 4. Respond with 200 immediately
+  res.status(200).json({ received: true });
+});
+```
+
+```python Python (Flask)
+import hmac
+import hashlib
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route("/webhooks/billing", methods=["POST"])
+def handle_webhook():
+    # 1. Verify the signature (see Webhooks guide for details)
+    signature = request.headers.get("X-Billing-Signature")
+    # ... verification logic ...
+
+    # 2. Parse the event
+    event = request.get_json()
+
+    # 3. Handle the event
+    if event["type"] == "checkout.completed":
+        checkout = event["data"]
+        order_id = checkout["metadata"]["order_id"]
+
+        # Fulfill the order
+        fulfill_order(order_id, {
+            "tx_hash": checkout["tx_hash"],
+            "amount_usd": checkout["amount_usd"],
+            "chain": checkout["chain"],
+            "token": checkout["token"],
+            "confirmed_at": checkout["confirmed_at"],
+        })
+
+    elif event["type"] == "checkout.expired":
+        handle_expired_checkout(event["data"]["metadata"]["order_id"])
+
+    elif event["type"] == "checkout.failed":
+        handle_failed_checkout(event["data"]["metadata"]["order_id"])
+
+    # 4. Respond with 200 immediately
+    return jsonify({"received": True}), 200
+```
+
+</CodeGroup>
+
+<Warning>
+  **Always verify webhook signatures** before processing events. An attacker
+  could send fake events to your endpoint. See the
+  [Webhooks](/guides/webhooks) guide for signature verification code in
+  Node.js, Python, and Go.
+</Warning>
+
+---
+
+## Complete Flow Summary
+
+```
+┌─────────────┐     POST /payment-methods     ┌─────────────┐
+│  Your Server │ ───────────────────────────── │ billing.io  │
+│              │                               │   API       │
+│              │     POST /checkouts           │             │
+│              │ ───────────────────────────── │             │
+│              │ <── checkout_id + deposit_addr│             │
+│              │                               │             │
+│              │     Redirect customer ──────> │  Checkout   │
+│              │                               │  Page       │
+│              │                               │             │
+│              │                               │ Chain       │
+│              │ <── webhook: checkout.completed│ Watcher    │
+│              │                               │ confirms tx │
+│              │     Fulfill order             │             │
+└─────────────┘                               └─────────────┘
+```
+
+---
+
+## Next Steps
+
+- [Set up webhooks](/guides/webhooks) for real-time event notifications
+- [Test in sandbox](/guides/sandbox-testing) before going live
+- [Use idempotency keys](/guides/idempotency) to safely retry requests
+- [Set up subscription billing](/guides/subscription-billing) for recurring payments

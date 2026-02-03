@@ -1,0 +1,133 @@
+---
+title: "Ruby"
+description: "Official billing.io SDK for Ruby"
+---
+
+The official billing.io SDK for Ruby 3.0+. Zero runtime dependencies -- uses only the Ruby standard library.
+
+<CardGroup cols={2}>
+  <Card title="RubyGems" icon="gem" href="https://rubygems.org/gems/billingio">
+    billingio
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/billingio/billingio-ruby">
+    billingio/billingio-ruby
+  </Card>
+</CardGroup>
+
+## Installation
+
+```bash
+gem install billingio
+```
+
+Or add to your Gemfile:
+
+```ruby
+gem "billingio"
+```
+
+## Quick Start
+
+```ruby
+require "billingio"
+
+client = BillingIO::Client.new(api_key: "sk_live_...")
+
+checkout = client.checkouts.create(
+  amount_usd: 49.99,
+  chain: "tron",
+  token: "USDT",
+  metadata: { order_id: "ord_12345" }
+)
+
+puts checkout.checkout_id
+puts checkout.deposit_address
+```
+
+## List with Pagination
+
+Fetch a single page:
+
+```ruby
+page = client.checkouts.list(limit: 10)
+
+page.data.each do |checkout|
+  puts "#{checkout.checkout_id} - #{checkout.status}"
+end
+```
+
+Auto-paginate through all results (uses `Enumerable`):
+
+```ruby
+client.checkouts.list.auto_paginate.each do |checkout|
+  puts checkout.checkout_id
+end
+```
+
+## Get Checkout Status
+
+```ruby
+status = client.checkouts.get_status("chk_abc123")
+
+puts status.status                  # "confirming"
+puts status.confirmations            # 8
+puts status.required_confirmations   # 19
+```
+
+## Webhook Signature Verification
+
+### Rails
+
+```ruby
+class WebhooksController < ApplicationController
+  skip_before_action :verify_authenticity_token
+
+  def billing
+    is_valid = BillingIO::WebhookSignature.verify(
+      payload: request.raw_post,
+      signature: request.headers["X-Billing-Signature"],
+      secret: "whsec_..."
+    )
+
+    unless is_valid
+      return head :unauthorized
+    end
+
+    event = JSON.parse(request.raw_post)
+    # process event...
+    head :ok
+  end
+end
+```
+
+### Sinatra
+
+```ruby
+post "/webhooks/billing" do
+  payload = request.body.read
+
+  unless BillingIO::WebhookSignature.verify(
+    payload: payload,
+    signature: request.env["HTTP_X_BILLING_SIGNATURE"],
+    secret: "whsec_..."
+  )
+    halt 401, "Invalid signature"
+  end
+
+  event = JSON.parse(payload)
+  # process event...
+  status 200
+end
+```
+
+## Error Handling
+
+```ruby
+begin
+  client.checkouts.create(amount_usd: -1, chain: "tron", token: "USDT")
+rescue BillingIO::Error => e
+  puts e.status   # 422
+  puts e.code     # "validation_error"
+  puts e.message  # "amount_usd must be positive"
+end
+```

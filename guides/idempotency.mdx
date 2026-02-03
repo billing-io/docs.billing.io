@@ -1,0 +1,462 @@
+---
+title: "Idempotency"
+description: "Safely retry requests without duplicate side effects"
+---
+
+## Overview
+
+Network errors, timeouts, and retries are inevitable in distributed systems. Without idempotency, a retried `POST /checkouts` request could create two checkouts and charge your customer twice.
+
+billing.io supports **idempotency keys** on mutating endpoints. When you include an `Idempotency-Key` header, billing.io guarantees that the same request is processed only once -- even if you send it multiple times.
+
+---
+
+## What Idempotency Means
+
+An operation is **idempotent** if performing it multiple times produces the same result as performing it once.
+
+- `GET /checkouts/co_abc123` is naturally idempotent -- calling it 10 times returns the same checkout
+- `POST /checkouts` is **not** naturally idempotent -- calling it 10 times creates 10 checkouts
+
+The `Idempotency-Key` header makes non-idempotent operations safe to retry:
+
+```
+First request:  POST /checkouts + Idempotency-Key: abc  -->  Creates checkout co_123
+Second request: POST /checkouts + Idempotency-Key: abc  -->  Returns cached co_123 (no new checkout)
+Third request:  POST /checkouts + Idempotency-Key: abc  -->  Returns cached co_123 (no new checkout)
+```
+
+---
+
+## Using the Idempotency-Key Header
+
+Include the `Idempotency-Key` header in your request with a unique identifier (UUID recommended):
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/checkouts \
+  -H "Authorization: Bearer sk_live_xxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
+  -d '{
+    "amount_usd": 49.99,
+    "chain": "tron",
+    "token": "USDT"
+  }'
+```
+
+```javascript Node.js
+import { randomUUID } from "crypto";
+
+async function createCheckoutSafely(checkoutData) {
+  const idempotencyKey = randomUUID();
+
+  const response = await fetch("https://api.billing.io/v1/checkouts", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer sk_live_xxx",
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify(checkoutData),
+  });
+
+  return response.json();
+}
+```
+
+```python Python
+import uuid
+import requests
+
+def create_checkout_safely(checkout_data: dict) -> dict:
+    idempotency_key = str(uuid.uuid4())
+
+    response = requests.post(
+        "https://api.billing.io/v1/checkouts",
+        headers={
+            "Authorization": "Bearer sk_live_xxx",
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotency_key,
+        },
+        json=checkout_data,
+    )
+
+    return response.json()
+```
+
+```go Go
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+
+	"github.com/google/uuid"
+)
+
+func createCheckoutSafely(checkoutData map[string]interface{}) (*http.Response, error) {
+	idempotencyKey := uuid.New().String()
+
+	body, err := json.Marshal(checkoutData)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", "https://api.billing.io/v1/checkouts", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer sk_live_xxx")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", idempotencyKey)
+
+	return http.DefaultClient.Do(req)
+}
+```
+
+</CodeGroup>
+
+---
+
+## Which Endpoints Support Idempotency
+
+Idempotency keys are supported on all `POST` endpoints that create resources:
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /checkouts` | Create a checkout |
+| `POST /customers` | Create a customer |
+| `POST /payment-methods` | Create a payment method |
+| `POST /payment-links` | Create a payment link |
+| `POST /subscriptions/plans` | Create a subscription plan |
+| `POST /subscriptions` | Create a subscription |
+| `POST /subscriptions/entitlements` | Create an entitlement |
+| `POST /payouts` | Create a payout intent |
+| `POST /payouts/{id}/execute` | Submit a transaction hash |
+| `POST /revenue/adjustments` | Create an adjustment |
+| `POST /webhooks` | Create a webhook endpoint |
+
+<Note>
+  `GET`, `PATCH`, and `DELETE` requests are naturally idempotent or safe to
+  retry without an idempotency key. The `Idempotency-Key` header is ignored
+  on these methods.
+</Note>
+
+---
+
+## Key Format Recommendations
+
+Use **UUID v4** strings for idempotency keys. This ensures uniqueness across distributed systems without coordination.
+
+<CodeGroup>
+
+```javascript Node.js
+import { randomUUID } from "crypto";
+
+const key = randomUUID();
+// "550e8400-e29b-41d4-a716-446655440000"
+```
+
+```python Python
+import uuid
+
+key = str(uuid.uuid4())
+# "550e8400-e29b-41d4-a716-446655440000"
+```
+
+```go Go
+import "github.com/google/uuid"
+
+key := uuid.New().String()
+// "550e8400-e29b-41d4-a716-446655440000"
+```
+
+```bash Shell
+# macOS / Linux
+uuidgen
+# "550E8400-E29B-41D4-A716-446655440000"
+```
+
+</CodeGroup>
+
+### Alternative key strategies
+
+For some use cases, you might want deterministic keys tied to your business logic:
+
+```javascript
+// Tie idempotency to your order ID -- ensures one checkout per order
+const key = `checkout-for-order-${orderId}`;
+
+// Tie idempotency to a user action
+const key = `user-${userId}-purchase-${productId}-${timestamp}`;
+```
+
+<Tip>
+  Deterministic keys are useful when the same logical operation might be
+  triggered from multiple places in your code. For example, using
+  `checkout-for-order-${orderId}` ensures only one checkout is created
+  per order, regardless of how many times your checkout handler runs.
+</Tip>
+
+---
+
+## Behavior on Duplicate Requests
+
+### Same key, same parameters
+
+If you send a request with the same `Idempotency-Key` and the same request body, billing.io returns the **cached response** from the original request:
+
+```
+Request 1: POST /checkouts + Key: abc + Body: {amount: 49.99}  -->  201 Created  {checkout_id: "co_123"}
+Request 2: POST /checkouts + Key: abc + Body: {amount: 49.99}  -->  200 OK       {checkout_id: "co_123"}
+```
+
+The second request returns the same checkout without creating a new one. The HTTP status code may differ (`200` instead of `201`) to indicate it was a cached response.
+
+### Same key, different parameters
+
+If you reuse an idempotency key with **different** request parameters, billing.io returns a `409 Conflict` error:
+
+```
+Request 1: POST /checkouts + Key: abc + Body: {amount: 49.99}  -->  201 Created
+Request 2: POST /checkouts + Key: abc + Body: {amount: 99.99}  -->  409 Conflict
+```
+
+```json
+{
+  "error": {
+    "type": "idempotency_conflict",
+    "code": "idempotency_key_reused",
+    "message": "This idempotency key was already used with different parameters.",
+    "param": null
+  }
+}
+```
+
+<Warning>
+  Never reuse an idempotency key for a logically different operation. Generate
+  a new UUID for each unique request. Reusing keys with different parameters
+  will result in a `409 Conflict` error.
+</Warning>
+
+---
+
+## Idempotency Key Expiration
+
+Idempotency keys and their cached responses expire after **24 hours**. After expiration:
+
+- The same key can be reused for a new request
+- The cached response is no longer available
+- A new resource will be created if the key is reused
+
+```
+Hour 0:   POST /checkouts + Key: abc  -->  201 Created  {checkout_id: "co_123"}
+Hour 1:   POST /checkouts + Key: abc  -->  200 OK       {checkout_id: "co_123"}  (cached)
+Hour 25:  POST /checkouts + Key: abc  -->  201 Created  {checkout_id: "co_456"}  (new checkout, key expired)
+```
+
+<Note>
+  The 24-hour window is more than sufficient for handling network retries.
+  If your retry logic takes longer than 24 hours, generate a new idempotency
+  key for the fresh attempt.
+</Note>
+
+---
+
+## Retry Pattern with Idempotency
+
+Here is a robust retry pattern that combines idempotency keys with exponential backoff:
+
+<CodeGroup>
+
+```javascript Node.js
+import { randomUUID } from "crypto";
+
+async function createCheckoutWithRetry(checkoutData, maxRetries = 3) {
+  // Generate the idempotency key ONCE, outside the retry loop
+  const idempotencyKey = randomUUID();
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch("https://api.billing.io/v1/checkouts", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.BILLING_API_KEY}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify(checkoutData),
+      });
+
+      if (response.status === 429) {
+        // Rate limited -- wait and retry
+        const retryAfter = parseInt(response.headers.get("Retry-After") || "5");
+        await sleep(retryAfter * 1000);
+        continue;
+      }
+
+      if (response.status >= 500) {
+        // Server error -- retry with backoff
+        if (attempt < maxRetries) {
+          await sleep(Math.pow(2, attempt) * 1000); // 1s, 2s, 4s
+          continue;
+        }
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(`API error: ${data.error?.message || response.statusText}`);
+      }
+
+      return data;
+    } catch (err) {
+      if (err.name === "TypeError" && attempt < maxRetries) {
+        // Network error (fetch failed) -- retry with backoff
+        await sleep(Math.pow(2, attempt) * 1000);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw new Error(`Failed after ${maxRetries + 1} attempts`);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Usage
+const checkout = await createCheckoutWithRetry({
+  amount_usd: 49.99,
+  chain: "tron",
+  token: "USDT",
+  metadata: { order_id: "ord_12345" },
+});
+```
+
+```python Python
+import uuid
+import time
+import requests
+
+def create_checkout_with_retry(checkout_data: dict, max_retries: int = 3) -> dict:
+    # Generate the idempotency key ONCE, outside the retry loop
+    idempotency_key = str(uuid.uuid4())
+
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.post(
+                "https://api.billing.io/v1/checkouts",
+                headers={
+                    "Authorization": f"Bearer {BILLING_API_KEY}",
+                    "Content-Type": "application/json",
+                    "Idempotency-Key": idempotency_key,
+                },
+                json=checkout_data,
+                timeout=30,
+            )
+
+            if response.status_code == 429:
+                # Rate limited -- wait and retry
+                retry_after = int(response.headers.get("Retry-After", "5"))
+                time.sleep(retry_after)
+                continue
+
+            if response.status_code >= 500:
+                # Server error -- retry with backoff
+                if attempt < max_retries:
+                    time.sleep(2 ** attempt)  # 1s, 2s, 4s
+                    continue
+
+            data = response.json()
+            response.raise_for_status()
+            return data
+
+        except requests.exceptions.ConnectionError:
+            if attempt < max_retries:
+                time.sleep(2 ** attempt)
+                continue
+            raise
+
+    raise Exception(f"Failed after {max_retries + 1} attempts")
+
+
+# Usage
+checkout = create_checkout_with_retry({
+    "amount_usd": 49.99,
+    "chain": "tron",
+    "token": "USDT",
+    "metadata": {"order_id": "ord_12345"},
+})
+```
+
+</CodeGroup>
+
+<Warning>
+  **Critical:** Generate the idempotency key **outside** the retry loop.
+  If you generate a new key on each retry, you lose the idempotency guarantee
+  and may create duplicate resources.
+</Warning>
+
+---
+
+## Common Mistakes
+
+### Generating a new key per retry
+
+```javascript
+// WRONG -- generates a new key each time, defeating idempotency
+for (let i = 0; i < 3; i++) {
+  await fetch("/checkouts", {
+    headers: { "Idempotency-Key": randomUUID() }, // New key each retry!
+    body: JSON.stringify(data),
+  });
+}
+
+// CORRECT -- same key for all retries
+const key = randomUUID();
+for (let i = 0; i < 3; i++) {
+  await fetch("/checkouts", {
+    headers: { "Idempotency-Key": key }, // Same key
+    body: JSON.stringify(data),
+  });
+}
+```
+
+### Reusing keys for different operations
+
+```javascript
+// WRONG -- same key for different checkouts
+const key = "my-fixed-key";
+await createCheckout({ amount_usd: 10 }, key); // First checkout
+await createCheckout({ amount_usd: 20 }, key); // 409 Conflict!
+
+// CORRECT -- unique key per logical operation
+await createCheckout({ amount_usd: 10 }, randomUUID());
+await createCheckout({ amount_usd: 20 }, randomUUID());
+```
+
+### Not including a key at all
+
+```javascript
+// RISKY -- no idempotency protection
+await fetch("/checkouts", {
+  method: "POST",
+  body: JSON.stringify({ amount_usd: 49.99, chain: "tron", token: "USDT" }),
+});
+// If this times out and you retry, you may create two checkouts
+```
+
+---
+
+## Next Steps
+
+- [Accept payments](/guides/accept-payments) with idempotent checkout creation
+- [Set up webhooks](/guides/webhooks) and handle duplicate events idempotently
+- [Test in sandbox](/guides/sandbox-testing) to verify your retry logic

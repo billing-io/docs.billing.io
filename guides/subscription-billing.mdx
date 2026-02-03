@@ -1,0 +1,696 @@
+---
+title: "Set Up Subscription Billing"
+description: "Create recurring crypto billing plans for your customers"
+---
+
+## Overview
+
+billing.io lets you create recurring billing plans and subscribe your customers to them. Payments are collected in crypto at each billing interval through automated checkout sessions.
+
+This guide covers the full lifecycle: creating plans, subscribing customers, handling renewals, checking entitlements, and managing lifecycle events.
+
+<Info>
+  **Prerequisites** -- You need at least one active
+  [payment method](/guides/accept-payments#step-1-create-a-payment-method)
+  configured before creating subscriptions. Subscription billing requires the
+  **Growth** plan or above.
+</Info>
+
+---
+
+## Step 1: Create a Customer
+
+Every subscription is tied to a customer. Create one first.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/customers \
+  -H "Authorization: Bearer sk_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "jane@example.com",
+    "name": "Jane Doe",
+    "external_id": "usr_12345",
+    "metadata": {
+      "company": "Acme Corp",
+      "plan_source": "website"
+    }
+  }'
+```
+
+```javascript Node.js
+const response = await fetch("https://api.billing.io/v1/customers", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer sk_live_xxx",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    email: "jane@example.com",
+    name: "Jane Doe",
+    external_id: "usr_12345",
+    metadata: {
+      company: "Acme Corp",
+      plan_source: "website",
+    },
+  }),
+});
+
+const customer = await response.json();
+console.log(customer.id); // "cus_a1b2c3d4e5f6..."
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "https://api.billing.io/v1/customers",
+    headers={
+        "Authorization": "Bearer sk_live_xxx",
+        "Content-Type": "application/json",
+    },
+    json={
+        "email": "jane@example.com",
+        "name": "Jane Doe",
+        "external_id": "usr_12345",
+        "metadata": {
+            "company": "Acme Corp",
+            "plan_source": "website",
+        },
+    },
+)
+
+customer = response.json()
+print(customer["id"])  # "cus_a1b2c3d4e5f6..."
+```
+
+</CodeGroup>
+
+Response:
+
+```json
+{
+  "id": "cus_a1b2c3d4e5f6a7b8c9d0e1f2",
+  "org_id": "org_...",
+  "email": "jane@example.com",
+  "name": "Jane Doe",
+  "external_id": "usr_12345",
+  "metadata": {
+    "company": "Acme Corp",
+    "plan_source": "website"
+  },
+  "environment": "live",
+  "created_at": "2025-06-15T10:00:00Z",
+  "updated_at": "2025-06-15T10:00:00Z"
+}
+```
+
+<Tip>
+  Use `external_id` to map billing.io customers to users in your own system.
+  This makes it easy to look up customers by your internal ID. The combination
+  of `(org_id, email, environment)` and `(org_id, external_id, environment)`
+  must be unique.
+</Tip>
+
+---
+
+## Step 2: Create a Subscription Plan
+
+A **subscription plan** defines the recurring billing terms: price, interval, token, chain, and optional trial period.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/subscriptions/plans \
+  -H "Authorization: Bearer sk_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Pro Monthly",
+    "description": "Full access to all Pro features",
+    "amount_usd": 19.99,
+    "interval": "monthly",
+    "trial_days": 14,
+    "token": "USDT",
+    "chain": "tron"
+  }'
+```
+
+```javascript Node.js
+const response = await fetch("https://api.billing.io/v1/subscriptions/plans", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer sk_live_xxx",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    name: "Pro Monthly",
+    description: "Full access to all Pro features",
+    amount_usd: 19.99,
+    interval: "monthly",
+    trial_days: 14,
+    token: "USDT",
+    chain: "tron",
+  }),
+});
+
+const plan = await response.json();
+console.log(plan.id); // "plan_..."
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "https://api.billing.io/v1/subscriptions/plans",
+    headers={
+        "Authorization": "Bearer sk_live_xxx",
+        "Content-Type": "application/json",
+    },
+    json={
+        "name": "Pro Monthly",
+        "description": "Full access to all Pro features",
+        "amount_usd": 19.99,
+        "interval": "monthly",
+        "trial_days": 14,
+        "token": "USDT",
+        "chain": "tron",
+    },
+)
+
+plan = response.json()
+print(plan["id"])  # "plan_..."
+```
+
+</CodeGroup>
+
+Response:
+
+```json
+{
+  "id": "plan_c3d4e5f6a7b8c9d0e1f2a3b4",
+  "org_id": "org_...",
+  "name": "Pro Monthly",
+  "description": "Full access to all Pro features",
+  "amount": 19.99,
+  "currency": "USD",
+  "token": "USDT",
+  "interval": "monthly",
+  "interval_count": 1,
+  "trial_days": 14,
+  "status": "active",
+  "environment": "live",
+  "created_at": "2025-06-15T10:05:00Z",
+  "updated_at": "2025-06-15T10:05:00Z"
+}
+```
+
+**Available intervals:** `daily`, `weekly`, `monthly`, `yearly`
+
+<Note>
+  Plans can be archived with `PATCH /subscriptions/plans/{id}` by setting
+  `status` to `archived`. Archived plans cannot be assigned to new subscriptions
+  but existing subscriptions remain active.
+</Note>
+
+---
+
+## Step 3: Create a Subscription
+
+Subscribe a customer to a plan. If the plan has `trial_days > 0`, the subscription starts in `trialing` status. Otherwise, the first renewal checkout is created immediately.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/subscriptions \
+  -H "Authorization: Bearer sk_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_a1b2c3d4e5f6a7b8c9d0e1f2",
+    "plan_id": "plan_c3d4e5f6a7b8c9d0e1f2a3b4",
+    "payment_method_id": "pm_8f3a1b2c4d5e6f7a"
+  }'
+```
+
+```javascript Node.js
+const response = await fetch("https://api.billing.io/v1/subscriptions", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer sk_live_xxx",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    customer_id: "cus_a1b2c3d4e5f6a7b8c9d0e1f2",
+    plan_id: "plan_c3d4e5f6a7b8c9d0e1f2a3b4",
+    payment_method_id: "pm_8f3a1b2c4d5e6f7a",
+  }),
+});
+
+const subscription = await response.json();
+console.log(subscription.id);     // "sub_..."
+console.log(subscription.status); // "trialing"
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "https://api.billing.io/v1/subscriptions",
+    headers={
+        "Authorization": "Bearer sk_live_xxx",
+        "Content-Type": "application/json",
+    },
+    json={
+        "customer_id": "cus_a1b2c3d4e5f6a7b8c9d0e1f2",
+        "plan_id": "plan_c3d4e5f6a7b8c9d0e1f2a3b4",
+        "payment_method_id": "pm_8f3a1b2c4d5e6f7a",
+    },
+)
+
+subscription = response.json()
+print(subscription["id"])      # "sub_..."
+print(subscription["status"])  # "trialing"
+```
+
+</CodeGroup>
+
+Response:
+
+```json
+{
+  "id": "sub_d4e5f6a7b8c9d0e1f2a3b4c5",
+  "org_id": "org_...",
+  "customer_id": "cus_a1b2c3d4e5f6a7b8c9d0e1f2",
+  "plan_id": "plan_c3d4e5f6a7b8c9d0e1f2a3b4",
+  "payment_method_id": "pm_8f3a1b2c4d5e6f7a",
+  "status": "trialing",
+  "current_period_start": "2025-06-15T10:10:00Z",
+  "current_period_end": "2025-06-29T10:10:00Z",
+  "trial_end": "2025-06-29T10:10:00Z",
+  "canceled_at": null,
+  "cancel_at_period_end": false,
+  "pause_start": null,
+  "pause_end": null,
+  "environment": "live",
+  "created_at": "2025-06-15T10:10:00Z",
+  "updated_at": "2025-06-15T10:10:00Z"
+}
+```
+
+<Tip>
+  The `payment_method_id` field is optional. If omitted, billing.io uses your
+  organization's default payment method.
+</Tip>
+
+---
+
+## Step 4: Handle the Renewal Checkout Flow
+
+When a billing period ends, billing.io automatically creates a **renewal record** and a **checkout** for the next payment. Here is how the flow works:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                     Subscription Renewal Flow                        │
+│                                                                      │
+│  Period End                                                          │
+│      │                                                               │
+│      v                                                               │
+│  Renewal record created (status: pending)                            │
+│      │                                                               │
+│      v                                                               │
+│  Checkout created automatically (status: checkout_created)           │
+│      │                                                               │
+│      v                                                               │
+│  Customer pays the checkout                                          │
+│      │                                                               │
+│      ├── Payment confirmed ──> Renewal: paid ──> Period advanced     │
+│      │                                                               │
+│      └── Payment failed/expired ──> Renewal: failed                  │
+│              │                                                       │
+│              v                                                       │
+│         Retry (up to max_attempts)                                   │
+│              │                                                       │
+│              └── All retries exhausted ──> Subscription: past_due    │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Listing renewals
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.billing.io/v1/subscriptions/renewals?subscription_id=sub_d4e5f6a7b8c9d0e1f2a3b4c5&limit=10" \
+  -H "Authorization: Bearer sk_live_xxx"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/subscriptions/renewals?subscription_id=sub_d4e5f6a7b8c9d0e1f2a3b4c5&limit=10",
+  {
+    headers: { "Authorization": "Bearer sk_live_xxx" },
+  }
+);
+
+const { data: renewals } = await response.json();
+
+for (const renewal of renewals) {
+  console.log(`${renewal.id}: ${renewal.status} - $${renewal.amount} (attempt ${renewal.attempt_count})`);
+}
+```
+
+</CodeGroup>
+
+### Retrying a failed renewal
+
+If a renewal fails, you can manually trigger a retry to create a new checkout:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/subscriptions/renewals/ren_1a2b3c4d5e/retry \
+  -H "Authorization: Bearer sk_live_xxx"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/subscriptions/renewals/ren_1a2b3c4d5e/retry",
+  {
+    method: "POST",
+    headers: { "Authorization": "Bearer sk_live_xxx" },
+  }
+);
+
+const renewal = await response.json();
+console.log(renewal.checkout_id); // New checkout created for retry
+```
+
+</CodeGroup>
+
+---
+
+## Step 5: Check Entitlements
+
+**Entitlements** let you attach feature flags to subscription plans. You can gate features in your application based on what plan a customer is on.
+
+### Create an entitlement on a plan
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/subscriptions/entitlements \
+  -H "Authorization: Bearer sk_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan_id": "plan_c3d4e5f6a7b8c9d0e1f2a3b4",
+    "feature_key": "api_requests",
+    "value_type": "numeric",
+    "value_numeric": 10000
+  }'
+```
+
+```javascript Node.js
+// Create a numeric entitlement
+await fetch("https://api.billing.io/v1/subscriptions/entitlements", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer sk_live_xxx",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    plan_id: "plan_c3d4e5f6a7b8c9d0e1f2a3b4",
+    feature_key: "api_requests",
+    value_type: "numeric",
+    value_numeric: 10000,
+  }),
+});
+
+// Create a boolean entitlement
+await fetch("https://api.billing.io/v1/subscriptions/entitlements", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer sk_live_xxx",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    plan_id: "plan_c3d4e5f6a7b8c9d0e1f2a3b4",
+    feature_key: "advanced_analytics",
+    value_type: "boolean",
+    value_boolean: true,
+  }),
+});
+```
+
+</CodeGroup>
+
+### Check a customer's entitlement
+
+Use the check endpoint to determine if a customer has access to a specific feature at runtime:
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.billing.io/v1/subscriptions/entitlements/check?customer_id=cus_a1b2c3d4e5f6a7b8c9d0e1f2&feature_key=api_requests" \
+  -H "Authorization: Bearer sk_live_xxx"
+```
+
+```javascript Node.js
+async function checkEntitlement(customerId, featureKey) {
+  const response = await fetch(
+    `https://api.billing.io/v1/subscriptions/entitlements/check?customer_id=${customerId}&feature_key=${featureKey}`,
+    {
+      headers: { "Authorization": "Bearer sk_live_xxx" },
+    }
+  );
+
+  const result = await response.json();
+
+  if (result.has_access) {
+    console.log(`Customer has access to ${featureKey}`);
+    if (result.value_type === "numeric") {
+      console.log(`Limit: ${result.value_numeric}`);
+    }
+  } else {
+    console.log(`Customer does NOT have access to ${featureKey}`);
+  }
+
+  return result;
+}
+
+const entitlement = await checkEntitlement(
+  "cus_a1b2c3d4e5f6a7b8c9d0e1f2",
+  "api_requests"
+);
+```
+
+```python Python
+import requests
+
+def check_entitlement(customer_id: str, feature_key: str) -> dict:
+    response = requests.get(
+        "https://api.billing.io/v1/subscriptions/entitlements/check",
+        params={
+            "customer_id": customer_id,
+            "feature_key": feature_key,
+        },
+        headers={"Authorization": "Bearer sk_live_xxx"},
+    )
+
+    result = response.json()
+
+    if result["has_access"]:
+        print(f"Customer has access to {feature_key}")
+        if result["value_type"] == "numeric":
+            print(f"Limit: {result['value_numeric']}")
+    else:
+        print(f"Customer does NOT have access to {feature_key}")
+
+    return result
+
+entitlement = check_entitlement(
+    "cus_a1b2c3d4e5f6a7b8c9d0e1f2",
+    "api_requests",
+)
+```
+
+</CodeGroup>
+
+Response:
+
+```json
+{
+  "has_access": true,
+  "feature_key": "api_requests",
+  "value_type": "numeric",
+  "value_boolean": null,
+  "value_numeric": 10000,
+  "value_string": null,
+  "plan_id": "plan_c3d4e5f6a7b8c9d0e1f2a3b4",
+  "subscription_id": "sub_d4e5f6a7b8c9d0e1f2a3b4c5"
+}
+```
+
+Entitlements support three value types:
+
+| Value Type | Field | Use Case |
+|-----------|-------|----------|
+| `boolean` | `value_boolean` | Feature on/off flags (e.g., `advanced_analytics: true`) |
+| `numeric` | `value_numeric` | Usage limits (e.g., `api_requests: 10000`) |
+| `string` | `value_string` | Tier labels or config (e.g., `support_level: "priority"`) |
+
+---
+
+## Step 6: Handle Lifecycle Events
+
+Subscriptions move through a defined state machine. Set up webhooks to react to lifecycle transitions.
+
+### Subscription status flow
+
+```
+            ┌────────────────────────────────────────────┐
+            │                                            │
+            v                                            │
+  ┌──────────────┐     ┌─────────┐     ┌──────────┐     │
+  │   trialing   │ ──> │  active  │ ──> │ past_due │ ────┘
+  └──────────────┘     └─────────┘     └──────────┘  (payment recovered)
+                          │    │            │
+                          │    │            v
+                          │    │     ┌──────────┐
+                          │    └───> │  paused   │
+                          │         └──────────┘
+                          │              │
+                          v              v
+                    ┌──────────┐   ┌──────────┐
+                    │ canceled  │   │ expired   │
+                    └──────────┘   └──────────┘
+```
+
+### Key webhook events
+
+| Event | Description | Recommended Action |
+|-------|-------------|-------------------|
+| `subscription.renewed` | Period payment confirmed | Extend access for the new period |
+| `subscription.past_due` | Payment failed after retries | Warn customer, offer retry |
+| `subscription.paused` | Subscription paused | Restrict feature access |
+| `subscription.canceled` | Subscription canceled | Revoke access at period end |
+
+### Handling lifecycle transitions
+
+<CodeGroup>
+
+```javascript Node.js (Express)
+app.post("/webhooks/billing", express.raw({ type: "application/json" }), async (req, res) => {
+  const event = JSON.parse(req.body);
+
+  switch (event.type) {
+    case "subscription.renewed": {
+      // Payment was successful -- extend access
+      const { subscription_id, customer_id } = event.data;
+      await extendAccess(customer_id, subscription_id);
+      break;
+    }
+
+    case "subscription.past_due": {
+      // Payment failed -- notify the customer
+      const { customer_id, subscription_id } = event.data;
+      await sendPaymentFailedEmail(customer_id);
+      await flagAccountForRetry(subscription_id);
+      break;
+    }
+
+    case "subscription.paused": {
+      // Subscription paused -- restrict access
+      const { customer_id } = event.data;
+      await restrictAccess(customer_id);
+      break;
+    }
+
+    case "subscription.canceled": {
+      // Subscription canceled -- schedule access revocation
+      const { customer_id, current_period_end } = event.data;
+      await scheduleAccessRevocation(customer_id, current_period_end);
+      break;
+    }
+  }
+
+  res.status(200).json({ received: true });
+});
+```
+
+```python Python (Flask)
+@app.route("/webhooks/billing", methods=["POST"])
+def handle_webhook():
+    event = request.get_json()
+
+    if event["type"] == "subscription.renewed":
+        customer_id = event["data"]["customer_id"]
+        subscription_id = event["data"]["subscription_id"]
+        extend_access(customer_id, subscription_id)
+
+    elif event["type"] == "subscription.past_due":
+        customer_id = event["data"]["customer_id"]
+        send_payment_failed_email(customer_id)
+
+    elif event["type"] == "subscription.paused":
+        customer_id = event["data"]["customer_id"]
+        restrict_access(customer_id)
+
+    elif event["type"] == "subscription.canceled":
+        customer_id = event["data"]["customer_id"]
+        period_end = event["data"]["current_period_end"]
+        schedule_access_revocation(customer_id, period_end)
+
+    return jsonify({"received": True}), 200
+```
+
+</CodeGroup>
+
+### Managing subscription state
+
+<Tabs>
+  <Tab title="Cancel">
+    Cancel at end of period or immediately:
+
+    ```bash
+    # Cancel at end of current period
+    curl -X PATCH https://api.billing.io/v1/subscriptions/sub_d4e5f6a7b8c9d0e1f2a3b4c5 \
+      -H "Authorization: Bearer sk_live_xxx" \
+      -H "Content-Type: application/json" \
+      -d '{"action": "cancel"}'
+
+    # Cancel immediately
+    curl -X PATCH https://api.billing.io/v1/subscriptions/sub_d4e5f6a7b8c9d0e1f2a3b4c5 \
+      -H "Authorization: Bearer sk_live_xxx" \
+      -H "Content-Type: application/json" \
+      -d '{"action": "cancel_immediately"}'
+    ```
+  </Tab>
+  <Tab title="Pause">
+    Pause a subscription (skips future renewals):
+
+    ```bash
+    curl -X PATCH https://api.billing.io/v1/subscriptions/sub_d4e5f6a7b8c9d0e1f2a3b4c5 \
+      -H "Authorization: Bearer sk_live_xxx" \
+      -H "Content-Type: application/json" \
+      -d '{"action": "pause"}'
+    ```
+  </Tab>
+  <Tab title="Resume">
+    Resume a paused subscription:
+
+    ```bash
+    curl -X PATCH https://api.billing.io/v1/subscriptions/sub_d4e5f6a7b8c9d0e1f2a3b4c5 \
+      -H "Authorization: Bearer sk_live_xxx" \
+      -H "Content-Type: application/json" \
+      -d '{"action": "resume"}'
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Next Steps
+
+- [Set up webhooks](/guides/webhooks) to receive subscription lifecycle events
+- [Accept one-time payments](/guides/accept-payments) alongside subscriptions
+- [Orchestrate payouts](/guides/payout-orchestration) to send funds to recipients
+- [Test subscriptions in sandbox](/guides/sandbox-testing) before going live
