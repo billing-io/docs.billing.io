@@ -2,3 +2,22 @@
 title: "List Payment Methods"
 openapi: "GET /payment-methods"
 ---
+
+List all payment methods for your organization. Optionally filter by status.
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.billing.io/v1/payment-methods?status=active" \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/payment-methods?status=active",
+  { headers: { "Authorization": `Bearer ${process.env.BILLING_API_KEY}` } }
+);
+const { data } = await response.json();
+```
+
+</CodeGroup>

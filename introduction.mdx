@@ -42,6 +42,51 @@ billing.io lets merchants accept USDT and USDC across multiple blockchains. Paym
   </Step>
 </Steps>
 
+## Quick example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/checkouts \
+  -H "Authorization: Bearer $BILLING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount_usd": 49.99,
+    "chain": "tron",
+    "token": "USDT"
+  }'
+```
+
+```javascript Node.js
+import BillingIO from "@billing-io/sdk";
+
+const billing = new BillingIO({ apiKey: process.env.BILLING_API_KEY });
+
+const checkout = await billing.checkouts.create({
+  amount_usd: 49.99,
+  chain: "tron",
+  token: "USDT",
+});
+
+console.log(checkout.deposit_address);
+```
+
+```python Python
+from billingio import BillingIO
+
+billing = BillingIO(api_key="sk_live_...")
+
+checkout = billing.checkouts.create(
+    amount_usd=49.99,
+    chain="tron",
+    token="USDT",
+)
+
+print(checkout.deposit_address)
+```
+
+</CodeGroup>
+
 ---
 
 ## Supported chains and tokens

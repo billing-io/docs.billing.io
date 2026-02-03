@@ -2,3 +2,31 @@
 title: "Update a Subscription Plan"
 openapi: "PATCH /subscriptions/plans/{id}"
 ---
+
+Update a plan's name, description, or archive it.
+
+<CodeGroup>
+
+```bash cURL
+curl -X PATCH https://api.billing.io/v1/subscriptions/plans/plan_a1b2c3d4e5f6 \
+  -H "Authorization: Bearer $BILLING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "archived" }'
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/subscriptions/plans/plan_a1b2c3d4e5f6",
+  {
+    method: "PATCH",
+    headers: {
+      "Authorization": `Bearer ${process.env.BILLING_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ status: "archived" }),
+  }
+);
+const plan = await response.json();
+```
+
+</CodeGroup>

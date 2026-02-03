@@ -2,3 +2,42 @@
 title: "List Events"
 openapi: "GET /events"
 ---
+
+List webhook events. Useful for replaying missed webhooks or debugging. Filter by event type or checkout ID.
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.billing.io/v1/events?type=checkout.completed&limit=10" \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/events?type=checkout.completed&limit=10",
+  { headers: { "Authorization": `Bearer ${process.env.BILLING_API_KEY}` } }
+);
+const { data, has_more, next_cursor } = await response.json();
+```
+
+</CodeGroup>
+
+```json Response
+{
+  "data": [
+    {
+      "event_id": "evt_f1e2d3c4b5a6f7e8d9c0b1a2",
+      "type": "checkout.completed",
+      "checkout_id": "co_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "data": {
+        "checkout_id": "co_a1b2c3d4e5f6a7b8c9d0e1f2",
+        "status": "confirmed",
+        "amount_usd": 49.99
+      },
+      "created_at": "2025-01-15T12:05:31Z"
+    }
+  ],
+  "has_more": true,
+  "next_cursor": "evt_a1b2c3d4e5f6"
+}
+```

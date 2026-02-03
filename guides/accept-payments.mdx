@@ -10,6 +10,15 @@ This guide walks you through accepting your first crypto payment. By the end, yo
   See [Sandbox Testing](/guides/sandbox-testing) to get started.
 </Info>
 
+<Tip title="The 5-Minute Path">
+  1. Create a payment method
+  2. Create a checkout
+  3. Handle the `checkout.completed` webhook
+  4. Unlock access in your app
+
+  Everything else in the docs is optional and can be added later.
+</Tip>
+
 ---
 
 ## Step 1: Create a Payment Method
@@ -269,6 +278,8 @@ pending -> detected -> confirming -> confirmed
 | `confirmed` | Payment fully confirmed. This is a terminal state. |
 | `expired` | Checkout TTL exceeded without payment. Terminal state. |
 | `failed` | Unrecoverable error. Terminal state. |
+
+Webhooks are the recommended integration. Polling is provided as a fallback or for debugging.
 
 ### Option A: Poll for status
 

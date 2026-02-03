@@ -2,3 +2,49 @@
 title: "Create a Webhook Endpoint"
 openapi: "POST /webhooks"
 ---
+
+Register a webhook endpoint to receive event notifications. The signing secret is only returned once at creation.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/webhooks \
+  -H "Authorization: Bearer $BILLING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-app.com/webhooks/billing",
+    "events": ["checkout.completed", "checkout.expired"],
+    "description": "Production webhook"
+  }'
+```
+
+```javascript Node.js
+const response = await fetch("https://api.billing.io/v1/webhooks", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${process.env.BILLING_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    url: "https://your-app.com/webhooks/billing",
+    events: ["checkout.completed", "checkout.expired"],
+    description: "Production webhook",
+  }),
+});
+const webhook = await response.json();
+// Store webhook.secret securely -- only returned once
+console.log(webhook.secret); // "whsec_a1b2c3..."
+```
+
+</CodeGroup>
+
+```json Response
+{
+  "webhook_id": "we_a1b2c3d4e5f6a7b8c9d0e1f2",
+  "url": "https://your-app.com/webhooks/billing",
+  "events": ["checkout.completed", "checkout.expired"],
+  "secret": "whsec_a1b2c3d4e5f6a7b8c9d0e1f2",
+  "status": "active",
+  "created_at": "2025-01-15T12:00:00Z"
+}
+```

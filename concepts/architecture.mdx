@@ -114,6 +114,53 @@ All billing.io resources use prefixed IDs for easy identification. IDs are gener
   When contacting support, sharing the full prefixed ID helps us locate your resource instantly.
 </Info>
 
+### Working with prefixed IDs
+
+```javascript Node.js
+// Parse resource type from a billing.io ID
+function getResourceType(id) {
+  const prefixMap = {
+    pm_: "payment_method",
+    cus_: "customer",
+    sub_: "subscription",
+    plan_: "subscription_plan",
+    po_: "payout_intent",
+    stl_: "settlement",
+    rev_: "revenue_event",
+    adj_: "adjustment",
+    pl_: "payment_link",
+    chk_: "checkout",
+  };
+  for (const [prefix, type] of Object.entries(prefixMap)) {
+    if (id.startsWith(prefix)) return type;
+  }
+  return "unknown";
+}
+
+console.log(getResourceType("chk_a1b2c3d4e5f6"));
+// => "checkout"
+```
+
+### Environment-aware API calls
+
+```javascript Node.js
+// Use sk_test_ keys for sandbox, sk_live_ for production
+const billing = new BillingIO({
+  apiKey: process.env.NODE_ENV === "production"
+    ? process.env.BILLING_LIVE_KEY    // sk_live_...
+    : process.env.BILLING_TEST_KEY,   // sk_test_...
+});
+
+// Same API calls work in both environments
+const checkout = await billing.checkouts.create({
+  amount_usd: 49.99,
+  chain: "tron",
+  token: "USDT",
+});
+// In sandbox: payment is simulated
+// In production: real on-chain monitoring
+```
+
 ## Supported chains
 
 See the [Introduction](/introduction) for the current list of supported chains and tokens. All tokens are USD-pegged stablecoins — no exchange rate risk.

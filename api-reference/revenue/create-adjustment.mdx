@@ -2,3 +2,53 @@
 title: "Create an Adjustment"
 openapi: "POST /revenue/adjustments"
 ---
+
+Create a revenue adjustment (credit, debit, or chargeback).
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/revenue/adjustments \
+  -H "Authorization: Bearer $BILLING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "credit",
+    "amount": 25.00,
+    "currency": "USD",
+    "reason": "Goodwill credit for service disruption",
+    "customer_id": "cus_a1b2c3d4e5f6"
+  }'
+```
+
+```javascript Node.js
+const response = await fetch("https://api.billing.io/v1/revenue/adjustments", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${process.env.BILLING_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    type: "credit",
+    amount: 25.00,
+    currency: "USD",
+    reason: "Goodwill credit for service disruption",
+    customer_id: "cus_a1b2c3d4e5f6",
+  }),
+});
+const adjustment = await response.json();
+console.log(adjustment.id); // "adj_a1b2c3..."
+```
+
+</CodeGroup>
+
+```json Response
+{
+  "id": "adj_a1b2c3d4e5f6a7b8c9d0e1f2",
+  "type": "credit",
+  "amount": 25.00,
+  "currency": "USD",
+  "reason": "Goodwill credit for service disruption",
+  "customer_id": "cus_a1b2c3d4e5f6",
+  "created_at": "2025-01-15T12:00:00Z"
+}
+```

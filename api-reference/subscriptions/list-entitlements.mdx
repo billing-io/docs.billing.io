@@ -2,3 +2,22 @@
 title: "List Entitlements"
 openapi: "GET /subscriptions/entitlements"
 ---
+
+List entitlements for a plan. The `plan_id` query parameter is required.
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.billing.io/v1/subscriptions/entitlements?plan_id=plan_a1b2c3d4e5f6" \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/subscriptions/entitlements?plan_id=plan_a1b2c3d4e5f6",
+  { headers: { "Authorization": `Bearer ${process.env.BILLING_API_KEY}` } }
+);
+const { data } = await response.json();
+```
+
+</CodeGroup>

@@ -2,3 +2,24 @@
 title: "Get an Event"
 openapi: "GET /events/{event_id}"
 ---
+
+Retrieve a single event by ID for detailed inspection.
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.billing.io/v1/events/evt_f1e2d3c4b5a6f7e8d9c0b1a2 \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/events/evt_f1e2d3c4b5a6f7e8d9c0b1a2",
+  { headers: { "Authorization": `Bearer ${process.env.BILLING_API_KEY}` } }
+);
+const event = await response.json();
+console.log(event.type); // "checkout.completed"
+console.log(event.data);
+```
+
+</CodeGroup>

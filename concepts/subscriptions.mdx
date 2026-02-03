@@ -9,7 +9,7 @@ billing.io handles recurring billing through **plans**, **subscriptions**, and a
 billing.io manages the full lifecycle — trials, renewals, retries, pauses, cancellations — so you can focus on your product.
 
 <Info>
-  Subscription billing requires the **Growth** plan or above. You need at least one active
+  Subscription billing is available on **Growth** plans and above. You need at least one active
   [payment method](/concepts/payment-methods) configured before creating subscriptions.
 </Info>
 
@@ -80,7 +80,7 @@ Entitlements attach feature flags to plans. Use them to gate features based on w
 | `numeric` | `value_numeric` | `api_requests: 10000` |
 | `string` | `value_string` | `support_level: "priority"` |
 
-Check entitlements at runtime via `GET /subscriptions/entitlements/check`.
+Check entitlements at runtime via `GET /subscriptions/entitlements/check`. By centralizing entitlements in billing.io, your application no longer needs to manage billing edge cases — access decisions are derived directly from payment state.
 
 <Tip>
   Entitlements are defined on the **plan**, not on individual subscriptions.

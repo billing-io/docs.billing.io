@@ -2,3 +2,26 @@
 title: "Retry a Failed Renewal"
 openapi: "POST /subscriptions/renewals/{id}/retry"
 ---
+
+Retry a failed renewal by creating a new checkout for the billing amount.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/subscriptions/renewals/ren_a1b2c3d4e5f6/retry \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/subscriptions/renewals/ren_a1b2c3d4e5f6/retry",
+  {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${process.env.BILLING_API_KEY}` },
+  }
+);
+const renewal = await response.json();
+console.log(renewal.checkout_id); // new checkout created
+```
+
+</CodeGroup>

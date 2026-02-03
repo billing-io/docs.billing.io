@@ -2,3 +2,31 @@
 title: "Update a Customer"
 openapi: "PATCH /customers/{customer_id}"
 ---
+
+Update a customer's name, email, external_id, or metadata.
+
+<CodeGroup>
+
+```bash cURL
+curl -X PATCH https://api.billing.io/v1/customers/cus_a1b2c3d4e5f6a7b8c9d0e1f2 \
+  -H "Authorization: Bearer $BILLING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Alice Smith", "metadata": { "plan": "enterprise" } }'
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/customers/cus_a1b2c3d4e5f6a7b8c9d0e1f2",
+  {
+    method: "PATCH",
+    headers: {
+      "Authorization": `Bearer ${process.env.BILLING_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: "Alice Smith", metadata: { plan: "enterprise" } }),
+  }
+);
+const updated = await response.json();
+```
+
+</CodeGroup>

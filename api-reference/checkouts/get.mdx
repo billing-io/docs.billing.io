@@ -2,3 +2,23 @@
 title: "Get a Checkout"
 openapi: "GET /checkouts/{checkout_id}"
 ---
+
+Retrieve full details for a specific checkout by ID.
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.billing.io/v1/checkouts/co_a1b2c3d4e5f6a7b8c9d0e1f2 \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/checkouts/co_a1b2c3d4e5f6a7b8c9d0e1f2",
+  { headers: { "Authorization": `Bearer ${process.env.BILLING_API_KEY}` } }
+);
+const checkout = await response.json();
+console.log(checkout.status); // "confirmed"
+```
+
+</CodeGroup>

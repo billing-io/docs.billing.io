@@ -2,3 +2,32 @@
 title: "Update a Payout Intent"
 openapi: "PATCH /payouts/{id}"
 ---
+
+Approve or cancel a draft payout intent, or update its description and due date.
+
+<CodeGroup>
+
+```bash cURL
+curl -X PATCH https://api.billing.io/v1/payouts/po_a1b2c3d4e5f6 \
+  -H "Authorization: Bearer $BILLING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "approved" }'
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/payouts/po_a1b2c3d4e5f6",
+  {
+    method: "PATCH",
+    headers: {
+      "Authorization": `Bearer ${process.env.BILLING_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ status: "approved" }),
+  }
+);
+const payout = await response.json();
+console.log(payout.status); // "approved"
+```
+
+</CodeGroup>

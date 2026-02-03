@@ -2,3 +2,25 @@
 title: "Remove an Entitlement"
 openapi: "DELETE /subscriptions/entitlements/{id}"
 ---
+
+Remove an entitlement from a plan.
+
+<CodeGroup>
+
+```bash cURL
+curl -X DELETE https://api.billing.io/v1/subscriptions/entitlements/ent_a1b2c3d4e5f6 \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/subscriptions/entitlements/ent_a1b2c3d4e5f6",
+  {
+    method: "DELETE",
+    headers: { "Authorization": `Bearer ${process.env.BILLING_API_KEY}` },
+  }
+);
+// Returns 204 No Content on success
+```
+
+</CodeGroup>

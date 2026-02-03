@@ -2,3 +2,34 @@
 title: "Execute a Payout"
 openapi: "POST /payouts/{id}/execute"
 ---
+
+Submit the on-chain transaction hash after executing the payout from your wallet.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.billing.io/v1/payouts/po_a1b2c3d4e5f6/execute \
+  -H "Authorization: Bearer $BILLING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "tx_hash": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd" }'
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/payouts/po_a1b2c3d4e5f6/execute",
+  {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.BILLING_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      tx_hash: "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd",
+    }),
+  }
+);
+const payout = await response.json();
+console.log(payout.status); // "executed"
+```
+
+</CodeGroup>

@@ -2,3 +2,33 @@
 title: "Reconciliation Summary"
 openapi: "GET /payouts/reconciliation"
 ---
+
+Get a summary comparing payout intents against on-chain settlements, including any discrepancies.
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.billing.io/v1/payouts/reconciliation \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/payouts/reconciliation",
+  { headers: { "Authorization": `Bearer ${process.env.BILLING_API_KEY}` } }
+);
+const summary = await response.json();
+console.log(summary.matched.count);
+console.log(summary.unmatched_payouts.count);
+```
+
+</CodeGroup>
+
+```json Response
+{
+  "matched": { "count": 42, "total_amount": 21000.00 },
+  "unmatched_payouts": { "count": 1, "total_amount": 500.00 },
+  "unexpected_settlements": { "count": 0, "total_amount": 0 },
+  "discrepancies": []
+}
+```

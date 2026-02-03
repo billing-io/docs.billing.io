@@ -2,3 +2,40 @@
 title: "Accounting Periods"
 openapi: "GET /revenue/accounting"
 ---
+
+Get revenue accounting periods with gross, net, and adjustment breakdowns.
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.billing.io/v1/revenue/accounting?period=monthly" \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/revenue/accounting?period=monthly",
+  { headers: { "Authorization": `Bearer ${process.env.BILLING_API_KEY}` } }
+);
+const { data } = await response.json();
+console.log(data[0].gross_revenue);
+console.log(data[0].net_revenue);
+```
+
+</CodeGroup>
+
+```json Response
+{
+  "data": [
+    {
+      "period": "2025-01",
+      "gross_revenue": 12500.00,
+      "refunds": 200.00,
+      "adjustments_credit": 50.00,
+      "adjustments_debit": 0,
+      "chargebacks": 0,
+      "net_revenue": 12250.00
+    }
+  ]
+}
+```

@@ -2,3 +2,31 @@
 title: "Update an Entitlement"
 openapi: "PATCH /subscriptions/entitlements/{id}"
 ---
+
+Update an entitlement's value.
+
+<CodeGroup>
+
+```bash cURL
+curl -X PATCH https://api.billing.io/v1/subscriptions/entitlements/ent_a1b2c3d4e5f6 \
+  -H "Authorization: Bearer $BILLING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "value_numeric": 50000 }'
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/subscriptions/entitlements/ent_a1b2c3d4e5f6",
+  {
+    method: "PATCH",
+    headers: {
+      "Authorization": `Bearer ${process.env.BILLING_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ value_numeric: 50000 }),
+  }
+);
+const entitlement = await response.json();
+```
+
+</CodeGroup>

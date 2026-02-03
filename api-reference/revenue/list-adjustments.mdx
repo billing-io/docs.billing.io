@@ -2,3 +2,22 @@
 title: "List Adjustments"
 openapi: "GET /revenue/adjustments"
 ---
+
+List revenue adjustments. Filter by type (credit, debit, chargeback).
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.billing.io/v1/revenue/adjustments?type=credit&limit=10" \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/revenue/adjustments?type=credit&limit=10",
+  { headers: { "Authorization": `Bearer ${process.env.BILLING_API_KEY}` } }
+);
+const { data } = await response.json();
+```
+
+</CodeGroup>

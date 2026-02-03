@@ -2,3 +2,22 @@
 title: "List Revenue Events"
 openapi: "GET /revenue/events"
 ---
+
+List revenue events. Filter by type or date range.
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.billing.io/v1/revenue/events?event_type=checkout_confirmed&limit=10" \
+  -H "Authorization: Bearer $BILLING_API_KEY"
+```
+
+```javascript Node.js
+const response = await fetch(
+  "https://api.billing.io/v1/revenue/events?event_type=checkout_confirmed&limit=10",
+  { headers: { "Authorization": `Bearer ${process.env.BILLING_API_KEY}` } }
+);
+const { data } = await response.json();
+```
+
+</CodeGroup>

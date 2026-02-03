@@ -47,6 +47,57 @@ With a traditional payment processor like Stripe or PayPal, your customer's mone
   </Step>
 </Steps>
 
+## See it in code
+
+Here's the entire non-custodial payment flow in code -- create a checkout, and handle the confirmation webhook:
+
+<CodeGroup>
+
+```javascript Node.js
+// 1. Create a checkout -- generates a deposit address
+const checkout = await billing.checkouts.create({
+  amount_usd: 100.00,
+  chain: "tron",
+  token: "USDT",
+});
+// Customer sends USDT directly to checkout.deposit_address
+// Funds go straight to YOUR wallet -- billing.io never touches them
+
+// 2. Handle the webhook when payment confirms
+app.post("/webhooks/billing", (req, res) => {
+  const event = req.body;
+  if (event.type === "checkout.completed") {
+    // Payment confirmed on-chain -- funds are already in your wallet
+    console.log(`Received $${event.data.amount_usd} USDT`);
+    console.log(`Tx: ${event.data.tx_hash}`);
+  }
+  res.sendStatus(200);
+});
+```
+
+```python Python
+# 1. Create a checkout -- generates a deposit address
+checkout = billing.checkouts.create(
+    amount_usd=100.00,
+    chain="tron",
+    token="USDT",
+)
+# Customer sends USDT directly to checkout.deposit_address
+# Funds go straight to YOUR wallet -- billing.io never touches them
+
+# 2. Handle the webhook when payment confirms (Flask)
+@app.route("/webhooks/billing", methods=["POST"])
+def handle_webhook():
+    event = request.get_json()
+    if event["type"] == "checkout.completed":
+        # Payment confirmed on-chain -- funds are already in your wallet
+        print(f"Received ${event['data']['amount_usd']} USDT")
+        print(f"Tx: {event['data']['tx_hash']}")
+    return "", 200
+```
+
+</CodeGroup>
+
 <Note>
 There is no step 4. Your funds are already in your wallet. There's nothing to withdraw, no payout to wait for, and no one standing between you and your money.
 </Note>
