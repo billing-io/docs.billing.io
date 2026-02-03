@@ -135,10 +135,149 @@ try {
 }
 ```
 
-## TypeScript Support
-
-The SDK ships with full TypeScript types generated from the billing.io OpenAPI spec. All request and response types are exported:
+## Customers
 
 ```typescript
-import type { Checkout, CreateCheckoutParams } from "@billing-io/sdk";
+const customer = await billing.customers.create({
+  email: "alice@example.com",
+  name: "Alice Johnson",
+  metadata: { plan: "pro" },
+});
+
+const customer = await billing.customers.get("cus_abc123");
+
+const updated = await billing.customers.update("cus_abc123", {
+  name: "Alice Smith",
+});
+
+for await (const customer of billing.customers.list()) {
+  console.log(customer.email);
+}
+```
+
+## Payment Methods
+
+```typescript
+const pm = await billing.paymentMethods.create({
+  chain: "tron",
+  token: "USDT",
+  display_name: "Primary USDT",
+});
+
+await billing.paymentMethods.setDefault("pm_abc123");
+
+for await (const pm of billing.paymentMethods.list()) {
+  console.log(pm.display_name, pm.chain, pm.token);
+}
+```
+
+## Payment Links
+
+```typescript
+const link = await billing.paymentLinks.create({
+  amount_usd: 99.99,
+  chain: "arbitrum",
+  token: "USDC",
+  description: "Annual subscription",
+});
+
+console.log(link.url); // shareable payment URL
+```
+
+## Subscriptions
+
+```typescript
+// Create a plan
+const plan = await billing.subscriptionPlans.create({
+  name: "Pro Monthly",
+  amount_usd: 29.99,
+  interval: "monthly",
+  token: "USDT",
+  chain: "tron",
+});
+
+// Subscribe a customer
+const sub = await billing.subscriptions.create({
+  customer_id: "cus_abc123",
+  plan_id: plan.id,
+  payment_method_id: "pm_abc123",
+});
+
+// Update subscription (cancel, pause, resume)
+await billing.subscriptions.update("sub_abc123", { status: "canceled" });
+
+// List renewals
+for await (const renewal of billing.subscriptionRenewals.list({ subscription_id: "sub_abc123" })) {
+  console.log(renewal.status, renewal.amount_usd);
+}
+```
+
+## Entitlements
+
+```typescript
+const ent = await billing.entitlements.create({
+  plan_id: "plan_abc123",
+  feature_key: "api_calls",
+  value_type: "numeric",
+  value_numeric: 10000,
+});
+
+// Check entitlement for a customer
+const check = await billing.entitlements.check({
+  customer_id: "cus_abc123",
+  feature_key: "api_calls",
+});
+console.log(check.has_access, check.value);
+```
+
+## Payouts
+
+```typescript
+const payout = await billing.payoutIntents.create({
+  recipient_address: "TXyz...",
+  chain: "tron",
+  token: "USDT",
+  amount: 500.00,
+  currency: "USD",
+});
+
+// After executing externally, submit tx hash
+await billing.payoutIntents.execute("po_abc123", {
+  tx_hash: "0xabc...",
+});
+
+// List settlements
+for await (const settlement of billing.settlements.list()) {
+  console.log(settlement.tx_hash, settlement.confirmed_at);
+}
+```
+
+## Revenue
+
+```typescript
+for await (const event of billing.revenueEvents.list()) {
+  console.log(event.event_type, event.amount, event.currency);
+}
+
+// Create an adjustment
+const adj = await billing.adjustments.create({
+  type: "credit",
+  amount_usd: 10.00,
+  description: "Loyalty discount",
+  customer_id: "cus_abc123",
+});
+```
+
+## TypeScript Support
+
+The SDK ships with full TypeScript types. All request and response types are exported:
+
+```typescript
+import type {
+  Checkout,
+  Customer,
+  Subscription,
+  PayoutIntent,
+  RevenueEvent,
+} from "@billing-io/sdk";
 ```

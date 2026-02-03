@@ -120,6 +120,108 @@ post "/webhooks/billing" do
 end
 ```
 
+## Customers
+
+```ruby
+customer = client.customers.create(
+  email: "alice@example.com",
+  name: "Alice Johnson",
+  metadata: { plan: "pro" }
+)
+
+customer = client.customers.get("cus_abc123")
+updated = client.customers.update("cus_abc123", name: "Alice Smith")
+
+client.customers.list.auto_paginate.each do |c|
+  puts "#{c.name} - #{c.email}"
+end
+```
+
+## Payment Methods
+
+```ruby
+pm = client.payment_methods.create(
+  chain: "tron",
+  token: "USDT",
+  display_name: "Primary USDT"
+)
+
+client.payment_methods.set_default("pm_abc123")
+```
+
+## Subscriptions
+
+```ruby
+plan = client.subscription_plans.create(
+  name: "Pro Monthly",
+  amount_usd: 29.99,
+  interval: "monthly",
+  token: "USDT",
+  chain: "tron"
+)
+
+sub = client.subscriptions.create(
+  customer_id: "cus_abc123",
+  plan_id: plan.id,
+  payment_method_id: "pm_abc123"
+)
+
+# Cancel
+client.subscriptions.update("sub_abc123", status: "canceled")
+
+# Renewals
+client.subscription_renewals.list(subscription_id: "sub_abc123").auto_paginate.each do |r|
+  puts "#{r.status} - #{r.amount_usd}"
+end
+```
+
+## Entitlements
+
+```ruby
+ent = client.entitlements.create(
+  plan_id: "plan_abc123",
+  feature_key: "api_calls",
+  value_type: "numeric",
+  value_numeric: 10000
+)
+
+check = client.entitlements.check(customer_id: "cus_abc123", feature_key: "api_calls")
+puts "#{check.has_access} - #{check.value}"
+```
+
+## Payouts
+
+```ruby
+payout = client.payout_intents.create(
+  recipient_address: "TXyz...",
+  chain: "tron",
+  token: "USDT",
+  amount: 500.00,
+  currency: "USD"
+)
+
+client.payout_intents.execute("po_abc123", tx_hash: "0xabc...")
+
+client.settlements.list.auto_paginate.each do |s|
+  puts "#{s.tx_hash} - #{s.confirmed_at}"
+end
+```
+
+## Revenue
+
+```ruby
+client.revenue_events.list.auto_paginate.each do |e|
+  puts "#{e.event_type} - #{e.amount} #{e.currency}"
+end
+
+adj = client.adjustments.create(
+  type: "credit",
+  amount_usd: 10.00,
+  description: "Loyalty discount",
+  customer_id: "cus_abc123"
+)
+```
+
 ## Error Handling
 
 ```ruby

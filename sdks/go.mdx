@@ -152,6 +152,147 @@ if errors.As(err, &apiErr) {
 }
 ```
 
+## Customers
+
+```go
+customer, err := client.Customers.Create(ctx, billingio.CreateCustomerParams{
+	Email:    "alice@example.com",
+	Name:     "Alice Johnson",
+	Metadata: map[string]string{"plan": "pro"},
+})
+
+customer, err := client.Customers.Get(ctx, "cus_abc123")
+
+updated, err := client.Customers.Update(ctx, "cus_abc123", billingio.UpdateCustomerParams{
+	Name: "Alice Smith",
+})
+
+iter := client.Customers.List(ctx, billingio.ListParams{Limit: 25})
+for iter.Next() {
+	fmt.Println(iter.Current().Email)
+}
+```
+
+## Payment Methods
+
+```go
+pm, err := client.PaymentMethods.Create(ctx, billingio.CreatePaymentMethodParams{
+	Chain:       "tron",
+	Token:       "USDT",
+	DisplayName: "Primary USDT",
+})
+
+err = client.PaymentMethods.SetDefault(ctx, "pm_abc123")
+
+iter := client.PaymentMethods.List(ctx, billingio.ListParams{Limit: 10})
+for iter.Next() {
+	pm := iter.Current()
+	fmt.Println(pm.DisplayName, pm.Chain, pm.Token)
+}
+```
+
+## Payment Links
+
+```go
+link, err := client.PaymentLinks.Create(ctx, billingio.CreatePaymentLinkParams{
+	AmountUSD:   99.99,
+	Chain:       "arbitrum",
+	Token:       "USDC",
+	Description: "Annual subscription",
+})
+fmt.Println(link.URL)
+```
+
+## Subscriptions
+
+```go
+plan, err := client.SubscriptionPlans.Create(ctx, billingio.CreateSubscriptionPlanParams{
+	Name:      "Pro Monthly",
+	AmountUSD: 29.99,
+	Interval:  "monthly",
+	Token:     "USDT",
+	Chain:     "tron",
+})
+
+sub, err := client.Subscriptions.Create(ctx, billingio.CreateSubscriptionParams{
+	CustomerID:      "cus_abc123",
+	PlanID:          plan.ID,
+	PaymentMethodID: "pm_abc123",
+})
+
+// Cancel
+_, err = client.Subscriptions.Update(ctx, "sub_abc123", billingio.UpdateSubscriptionParams{
+	Status: "canceled",
+})
+
+// List renewals
+iter := client.SubscriptionRenewals.List(ctx, billingio.ListSubscriptionRenewalsParams{
+	SubscriptionID: "sub_abc123",
+})
+for iter.Next() {
+	r := iter.Current()
+	fmt.Println(r.Status, r.AmountUSD)
+}
+```
+
+## Entitlements
+
+```go
+ent, err := client.Entitlements.Create(ctx, billingio.CreateEntitlementParams{
+	PlanID:       "plan_abc123",
+	FeatureKey:   "api_calls",
+	ValueType:    "numeric",
+	ValueNumeric: 10000,
+})
+
+check, err := client.Entitlements.Check(ctx, billingio.CheckEntitlementParams{
+	CustomerID: "cus_abc123",
+	FeatureKey: "api_calls",
+})
+fmt.Println(check.HasAccess, check.Value)
+```
+
+## Payouts
+
+```go
+payout, err := client.PayoutIntents.Create(ctx, billingio.CreatePayoutIntentParams{
+	RecipientAddress: "TXyz...",
+	Chain:            "tron",
+	Token:            "USDT",
+	Amount:           500.00,
+	Currency:         "USD",
+})
+
+// Submit tx hash after executing externally
+err = client.PayoutIntents.Execute(ctx, "po_abc123", billingio.ExecutePayoutParams{
+	TxHash: "0xabc...",
+})
+
+// List settlements
+iter := client.Settlements.List(ctx, billingio.ListParams{Limit: 25})
+for iter.Next() {
+	s := iter.Current()
+	fmt.Println(s.TxHash, s.ConfirmedAt)
+}
+```
+
+## Revenue
+
+```go
+iter := client.RevenueEvents.List(ctx, billingio.ListParams{Limit: 25})
+for iter.Next() {
+	e := iter.Current()
+	fmt.Println(e.EventType, e.Amount, e.Currency)
+}
+
+adj, err := client.Adjustments.Create(ctx, billingio.CreateAdjustmentParams{
+	Type:        "credit",
+	AmountUSD:   10.00,
+	Description: "Loyalty discount",
+	CustomerID:  "cus_abc123",
+})
+```
+
 ## Context Support
 
 All methods accept a `context.Context` for cancellation and timeouts:

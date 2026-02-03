@@ -148,3 +148,124 @@ except BillingIOError as e:
 | `not_found` | 404 | Resource doesn't exist |
 | `validation_error` | 422 | Invalid request parameters |
 | `rate_limit_error` | 429 | Too many requests |
+
+## Customers
+
+```python
+customer = billing.customers.create(
+    email="alice@example.com",
+    name="Alice Johnson",
+    metadata={"plan": "pro"},
+)
+
+customer = billing.customers.get("cus_abc123")
+
+updated = billing.customers.update("cus_abc123", name="Alice Smith")
+
+for customer in auto_paginate(billing.customers.list):
+    print(customer.email)
+```
+
+## Payment Methods
+
+```python
+pm = billing.payment_methods.create(
+    chain="tron",
+    token="USDT",
+    display_name="Primary USDT",
+)
+
+billing.payment_methods.set_default("pm_abc123")
+
+page = billing.payment_methods.list(limit=10)
+for pm in page.data:
+    print(pm.display_name, pm.chain, pm.token)
+```
+
+## Payment Links
+
+```python
+link = billing.payment_links.create(
+    amount_usd=99.99,
+    chain="arbitrum",
+    token="USDC",
+    description="Annual subscription",
+)
+print(link.url)
+```
+
+## Subscriptions
+
+```python
+# Create a plan
+plan = billing.subscription_plans.create(
+    name="Pro Monthly",
+    amount_usd=29.99,
+    interval="monthly",
+    token="USDT",
+    chain="tron",
+)
+
+# Subscribe a customer
+sub = billing.subscriptions.create(
+    customer_id="cus_abc123",
+    plan_id=plan.id,
+    payment_method_id="pm_abc123",
+)
+
+# Cancel
+billing.subscriptions.update("sub_abc123", status="canceled")
+
+# List renewals
+for renewal in auto_paginate(billing.subscription_renewals.list):
+    print(renewal.status, renewal.amount_usd)
+```
+
+## Entitlements
+
+```python
+ent = billing.entitlements.create(
+    plan_id="plan_abc123",
+    feature_key="api_calls",
+    value_type="numeric",
+    value_numeric=10000,
+)
+
+check = billing.entitlements.check(
+    customer_id="cus_abc123",
+    feature_key="api_calls",
+)
+print(check.has_access, check.value)
+```
+
+## Payouts
+
+```python
+payout = billing.payout_intents.create(
+    recipient_address="TXyz...",
+    chain="tron",
+    token="USDT",
+    amount=500.00,
+    currency="USD",
+)
+
+# Submit tx hash after executing externally
+billing.payout_intents.execute("po_abc123", tx_hash="0xabc...")
+
+# List settlements
+for settlement in auto_paginate(billing.settlements.list):
+    print(settlement.tx_hash, settlement.confirmed_at)
+```
+
+## Revenue
+
+```python
+for event in auto_paginate(billing.revenue_events.list):
+    print(event.event_type, event.amount, event.currency)
+
+adj = billing.adjustments.create(
+    type="credit",
+    amount_usd=10.00,
+    description="Loyalty discount",
+    customer_id="cus_abc123",
+)

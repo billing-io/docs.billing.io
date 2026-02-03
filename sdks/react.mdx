@@ -134,13 +134,132 @@ function CustomComponent() {
 }
 ```
 
+## Customers
+
+```tsx
+import { useCustomers, useCreateCustomer } from "@billing-io/react";
+
+function CustomerList() {
+  const { data, loading } = useCustomers({ limit: 20 });
+  const { createCustomer } = useCreateCustomer();
+
+  return (
+    <div>
+      <button onClick={() => createCustomer({ email: "alice@example.com", name: "Alice" })}>
+        Add Customer
+      </button>
+      {data?.map((c) => <p key={c.id}>{c.name} - {c.email}</p>)}
+    </div>
+  );
+}
+```
+
+## Subscriptions
+
+```tsx
+import { useSubscriptions, useCreateSubscription } from "@billing-io/react";
+
+function SubscriptionManager() {
+  const { data: subs, loading } = useSubscriptions({ status: "active" });
+  const { createSubscription } = useCreateSubscription();
+
+  const handleSubscribe = () => {
+    createSubscription({
+      customer_id: "cus_abc123",
+      plan_id: "plan_abc123",
+      payment_method_id: "pm_abc123",
+    });
+  };
+
+  if (loading) return <p>Loading...</p>;
+
+  return (
+    <div>
+      <button onClick={handleSubscribe}>Subscribe</button>
+      {subs?.map((sub) => (
+        <p key={sub.id}>{sub.customer_id} - {sub.status}</p>
+      ))}
+    </div>
+  );
+}
+```
+
+## Payouts
+
+```tsx
+import { usePayouts, useCreatePayout, useExecutePayout } from "@billing-io/react";
+
+function PayoutDashboard() {
+  const { data: payouts } = usePayouts({ limit: 10 });
+  const { createPayout } = useCreatePayout();
+  const { executePayout } = useExecutePayout();
+
+  return (
+    <div>
+      {payouts?.map((p) => (
+        <div key={p.id}>
+          {p.amount} {p.token} - {p.status}
+          {p.status === "approved" && (
+            <button onClick={() => executePayout(p.id)}>
+              Submit TX
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
 ## Available Hooks
 
 | Hook | Description |
 | ---- | ----------- |
-| `useCreateCheckout` | Create a new checkout with loading/error state |
+| **Checkouts** | |
+| `useCreateCheckout` | Create a checkout with loading/error state |
 | `useCheckoutStatus` | Poll checkout status with auto-refresh |
 | `useCheckouts` | List checkouts with pagination |
+| **Customers** | |
+| `useCustomers` | List customers |
+| `useCustomer` | Get a single customer by ID |
+| `useCreateCustomer` | Create a new customer |
+| `useUpdateCustomer` | Update a customer |
+| **Payment Methods** | |
+| `usePaymentMethods` | List payment methods |
+| `useCreatePaymentMethod` | Create a payment method |
+| `useUpdatePaymentMethod` | Update a payment method |
+| `useDeletePaymentMethod` | Delete a payment method |
+| `useSetDefaultPaymentMethod` | Set default payment method |
+| **Payment Links** | |
+| `usePaymentLinks` | List payment links |
+| `useCreatePaymentLink` | Create a payment link |
+| **Subscriptions** | |
+| `useSubscriptions` | List subscriptions |
+| `useCreateSubscription` | Create a subscription |
+| `useUpdateSubscription` | Update/cancel a subscription |
+| `useSubscriptionPlans` | List plans |
+| `useCreateSubscriptionPlan` | Create a plan |
+| `useUpdateSubscriptionPlan` | Update/archive a plan |
+| `useRenewals` | List subscription renewals |
+| `useRetryRenewal` | Retry a failed renewal |
+| **Entitlements** | |
+| `useEntitlements` | List entitlements |
+| `useCreateEntitlement` | Create an entitlement |
+| `useUpdateEntitlement` | Update an entitlement |
+| `useDeleteEntitlement` | Delete an entitlement |
+| `useCheckEntitlement` | Check feature access for a customer |
+| **Payouts** | |
+| `usePayouts` | List payout intents |
+| `useCreatePayout` | Create a payout intent |
+| `useUpdatePayout` | Update a payout intent |
+| `useExecutePayout` | Submit tx hash for execution |
+| `useSettlements` | List settlements |
+| **Revenue** | |
+| `useRevenueEvents` | List revenue events |
+| `useAccounting` | Get accounting summary |
+| `useAdjustments` | List adjustments |
+| `useCreateAdjustment` | Create an adjustment |
+| **Other** | |
 | `useWebhookEndpoints` | Manage webhook endpoints |
 | `useEvents` | List billing events |
 | `useBillingClient` | Access the raw SDK client |

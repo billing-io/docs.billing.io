@@ -122,6 +122,137 @@ public class WebhookController {
 }
 ```
 
+## Customers
+
+```java
+import io.billing.model.Customer;
+
+Customer customer = billing.customers().create(
+    Customer.CreateParams.builder()
+        .email("alice@example.com")
+        .name("Alice Johnson")
+        .putMetadata("plan", "pro")
+        .build()
+);
+
+Customer fetched = billing.customers().get("cus_abc123");
+
+Customer updated = billing.customers().update("cus_abc123",
+    Customer.UpdateParams.builder()
+        .name("Alice Smith")
+        .build()
+);
+```
+
+## Payment Methods
+
+```java
+import io.billing.model.PaymentMethod;
+
+PaymentMethod pm = billing.paymentMethods().create(
+    PaymentMethod.CreateParams.builder()
+        .chain("tron")
+        .token("USDT")
+        .displayName("Primary USDT")
+        .build()
+);
+
+billing.paymentMethods().setDefault("pm_abc123");
+```
+
+## Subscriptions
+
+```java
+import io.billing.model.SubscriptionPlan;
+import io.billing.model.Subscription;
+
+SubscriptionPlan plan = billing.subscriptionPlans().create(
+    SubscriptionPlan.CreateParams.builder()
+        .name("Pro Monthly")
+        .amountUsd(29.99)
+        .interval("monthly")
+        .token("USDT")
+        .chain("tron")
+        .build()
+);
+
+Subscription sub = billing.subscriptions().create(
+    Subscription.CreateParams.builder()
+        .customerId("cus_abc123")
+        .planId(plan.getId())
+        .paymentMethodId("pm_abc123")
+        .build()
+);
+
+// Cancel
+billing.subscriptions().update("sub_abc123",
+    Subscription.UpdateParams.builder()
+        .status("canceled")
+        .build()
+);
+```
+
+## Entitlements
+
+```java
+import io.billing.model.Entitlement;
+
+Entitlement ent = billing.entitlements().create(
+    Entitlement.CreateParams.builder()
+        .planId("plan_abc123")
+        .featureKey("api_calls")
+        .valueType("numeric")
+        .valueNumeric(10000)
+        .build()
+);
+
+EntitlementCheck check = billing.entitlements().check(
+    Entitlement.CheckParams.builder()
+        .customerId("cus_abc123")
+        .featureKey("api_calls")
+        .build()
+);
+System.out.println(check.getHasAccess() + " " + check.getValue());
+```
+
+## Payouts
+
+```java
+import io.billing.model.PayoutIntent;
+
+PayoutIntent payout = billing.payoutIntents().create(
+    PayoutIntent.CreateParams.builder()
+        .recipientAddress("TXyz...")
+        .chain("tron")
+        .token("USDT")
+        .amount(500.00)
+        .currency("USD")
+        .build()
+);
+
+// Submit tx hash after executing externally
+billing.payoutIntents().execute("po_abc123",
+    PayoutIntent.ExecuteParams.builder()
+        .txHash("0xabc...")
+        .build()
+);
+```
+
+## Revenue
+
+```java
+import io.billing.model.Adjustment;
+
+Adjustment adj = billing.adjustments().create(
+    Adjustment.CreateParams.builder()
+        .type("credit")
+        .amountUsd(10.00)
+        .description("Loyalty discount")
+        .customerId("cus_abc123")
+        .build()
+);
+```
+
 ## Error Handling
 
 ```java
