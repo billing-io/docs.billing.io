@@ -1,35 +1,35 @@
-# billing.io
+# billing.io — Crypto Payment API
 
-Non-custodial crypto payment infrastructure for merchants.
+Non-custodial crypto payment API for accepting USDT and USDC stablecoin payments on Tron, Arbitrum, and Base.
 
 ## What is billing.io?
 
-billing.io lets merchants accept stablecoin payments (USDT and USDC) across multiple blockchains without ever giving up custody of their funds. When a customer pays, the crypto goes directly from their wallet to yours. billing.io monitors the blockchain, confirms the payment, and notifies your server via webhook. At no point does billing.io hold, touch, or have access to your funds.
+billing.io is a crypto payment gateway and billing API that lets merchants accept stablecoin payments (USDT, USDC) across multiple blockchains. It is fully non-custodial — crypto goes directly from the customer's wallet to yours. billing.io never holds, touches, or has access to your funds.
 
-## Non-custodial by design
+Use billing.io to accept crypto payments, manage recurring crypto subscriptions, orchestrate on-chain payouts, and track revenue — all through a REST API with SDKs for JavaScript, Python, Go, Ruby, Java, and React.
 
-Traditional payment processors receive your customer's money first, hold it, take a cut, and send you the rest days or weeks later. billing.io works differently:
+## Non-custodial crypto payments
 
-- **Payments go directly to your wallet** — no intermediary holds your funds
+Unlike traditional payment processors that hold your funds before paying you out, billing.io routes payments directly to your wallet on-chain:
+
+- **Direct wallet-to-wallet payments** — no intermediary holds your funds
 - **No frozen accounts** — your money is in your wallet the moment it arrives
 - **No payout delays** — funds settle on-chain in minutes, not days
 - **No counterparty risk** — if billing.io disappeared tomorrow, your funds would be unaffected
-- **Full transparency** — every transaction is verifiable on the public blockchain
+- **Fully verifiable** — every transaction is on the public blockchain
 
 Orchestration fees are charged separately and are never deducted from payments.
 
-## What billing.io does
+## Features
 
-billing.io handles everything around the payment without being in the flow of funds:
-
-- **Checkouts** — Generate unique deposit addresses for each payment session
-- **Blockchain monitoring** — Detect incoming transactions and track block confirmations in real time
+- **Crypto checkout API** — Generate unique deposit addresses for one-time crypto payments
+- **Crypto subscription billing** — Recurring billing with plans, trials, renewals, and automated retries — all paid in stablecoins
+- **Stablecoin payout orchestration** — Define payout intents, execute from your own wallet, and let billing.io verify and reconcile settlements on-chain
+- **Blockchain monitoring** — Real-time transaction detection and block confirmation tracking across Tron, Arbitrum, and Base
 - **Webhook notifications** — Push `checkout.completed` events to your server the instant a payment is confirmed
-- **Subscription billing** — Manage plans, trials, renewals, and automated retry logic for recurring crypto payments
-- **Payout orchestration** — Define payout intents, execute from your own wallet, and let billing.io verify and reconcile settlements on-chain
-- **Revenue tracking** — Immutable ledger of revenue events, period-based accounting summaries, and adjustments (credits, debits, chargebacks)
-- **Entitlements** — Attach feature flags to subscription plans and check access at runtime
-- **Payment links** — Shareable URLs that generate checkouts on the fly
+- **Revenue tracking** — Immutable ledger of revenue events, period-based accounting, and adjustments
+- **Entitlements** — Attach feature flags to subscription plans and gate access based on payment state
+- **Payment links** — Shareable URLs that generate crypto checkouts on the fly
 
 ## Supported chains and tokens
 
