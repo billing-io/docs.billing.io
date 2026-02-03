@@ -3,28 +3,18 @@ title: "Accept Crypto Payments"
 description: "End-to-end guide to accepting your first crypto payment"
 ---
 
-## Overview
-
-This guide walks you through accepting your first crypto payment on billing.io. By the end, you will have:
-
-1. Configured a payment method (chain + token + wallet)
-2. Created a checkout session
-3. Redirected your customer to pay
-4. Verified the payment via polling or webhook
-
-billing.io is **non-custodial** -- crypto goes directly to your wallet. billing.io never holds your funds.
+This guide walks you through accepting your first crypto payment. By the end, you will have configured a payment method, created a checkout, and handled the payment confirmation.
 
 <Info>
-  **Prerequisites** -- You need a billing.io account with an API key. Sandbox keys
-  (prefixed `sk_test_`) work for testing without real funds. See the
-  [Sandbox Testing](/guides/sandbox-testing) guide to get started.
+  You need a billing.io account with an API key. Use sandbox keys (`sk_test_`) to test without real funds.
+  See [Sandbox Testing](/guides/sandbox-testing) to get started.
 </Info>
 
 ---
 
 ## Step 1: Create a Payment Method
 
-A **payment method** defines how you receive crypto: which blockchain, which token, and which wallet address. You must create at least one before you can accept payments.
+A [payment method](/concepts/payment-methods) defines how you receive crypto. You must create at least one before you can accept payments.
 
 <Steps>
   <Step title="Register your wallet">
@@ -45,7 +35,6 @@ A **payment method** defines how you receive crypto: which blockchain, which tok
         "chain": "tron",
         "token": "USDT",
         "display_name": "USDT on Tron (Primary)",
-        "required_confirmations": 19,
         "is_default": true
       }'
     ```
@@ -62,7 +51,6 @@ A **payment method** defines how you receive crypto: which blockchain, which tok
         chain: "tron",
         token: "USDT",
         display_name: "USDT on Tron (Primary)",
-        required_confirmations: 19,
         is_default: true,
       }),
     });
@@ -85,7 +73,6 @@ A **payment method** defines how you receive crypto: which blockchain, which tok
             "chain": "tron",
             "token": "USDT",
             "display_name": "USDT on Tron (Primary)",
-            "required_confirmations": 19,
             "is_default": True,
         },
     )
@@ -108,7 +95,6 @@ A **payment method** defines how you receive crypto: which blockchain, which tok
       "display_name": "USDT on Tron (Primary)",
       "status": "active",
       "is_default": true,
-      "required_confirmations": 19,
       "min_amount_usd": null,
       "max_amount_usd": null,
       "environment": "live",
@@ -120,13 +106,9 @@ A **payment method** defines how you receive crypto: which blockchain, which tok
 </Steps>
 
 <Tip>
-  **Supported chains and tokens:**
-  - **Tron** -- USDT, USDC
-  - **Arbitrum** -- USDT, USDC
-  - **Base** -- USDT, USDC
-
-  You can create multiple payment methods for different chain/token combinations
-  and set one as the default.
+  billing.io applies safe confirmation defaults per chain. See
+  [Payment Methods](/concepts/payment-methods) for details on supported chains
+  and advanced configuration.
 </Tip>
 
 ---

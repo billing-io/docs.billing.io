@@ -4,121 +4,120 @@ sidebarTitle: "Payment Methods"
 description: "Configure how you receive crypto payments"
 ---
 
-## What Is a Payment Method?
+A payment method is the receiving rail for your crypto payments. It tells billing.io which blockchain, token, and wallet to use when a customer pays you.
 
-A payment method is the primary way you configure how you receive crypto payments on billing.io. It combines four things into a single, manageable resource:
+billing.io applies sensible, chain-specific defaults. Most users never need to change advanced settings.
 
-1. **Chain** -- which blockchain network (Tron, Arbitrum, or Base)
-2. **Token** -- which stablecoin (USDT or USDC)
-3. **Wallet** -- which receiving address on that chain
-4. **Rules** -- confirmation requirements, amount limits, and display settings
+<Info>
+  Funds go directly to your wallet. billing.io is [non-custodial](/what-is-non-custodial) — it monitors the blockchain and confirms payments, but never holds your crypto.
+</Info>
 
-When a customer pays you, the payment method determines where their funds go and what validation rules apply.
+---
 
-<Tip>
-  If you are coming from traditional payment processing, think of a payment method like a "bank account + processing rules" bundle.
-  Instead of a bank account number, you have a blockchain wallet. Instead of card network rules, you have confirmation thresholds and amount limits.
-</Tip>
+## How it works
 
-## Wallets vs. Payment Methods
+A payment method combines three things into a single resource:
 
-billing.io separates the concept of **wallets** (low-level plumbing) from **payment methods** (user-facing configuration).
+1. **Chain** — which blockchain network (Tron, Arbitrum, or Base)
+2. **Token** — which stablecoin (USDT or USDC)
+3. **Wallet** — which receiving address on that chain
 
-| Concept | Purpose | Scope |
-|---------|---------|-------|
-| **Wallet** | A blockchain address you own | Internal plumbing -- you register it once |
-| **Payment Method** | A configured receiving rail | Customer-facing -- defines how payments are processed |
+When a customer pays, billing.io routes the payment to the wallet defined by the payment method and monitors the blockchain until the transaction is confirmed.
 
-A single wallet can back multiple payment methods. For example, if you have one Tron wallet, you could create two payment methods from it: one for USDT with a $10 minimum, and another for USDC with no minimum.
+---
 
-```
-Wallet (Tron address: TXyz...)
-  |
-  +-- Payment Method: "USDT Payments" (chain: tron, token: USDT, min: $10)
-  +-- Payment Method: "USDC Payments" (chain: tron, token: USDC, min: $0)
-```
-
-<Note>
-  You manage wallets under **Settings > Wallets** in the dashboard. Payment methods are managed under
-  **Payments > Payment Methods**. Wallets are the plumbing; payment methods are what your customers interact with.
-</Note>
-
-## Configuration Options
-
-Each payment method has the following configuration:
+## Configuration
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `chain` | string | Blockchain network: `tron`, `arbitrum`, or `base` |
 | `token` | string | Stablecoin: `USDT` or `USDC` |
-| `wallet_id` | string | Reference to your registered wallet on that chain |
-| `display_name` | string | Human-readable label (e.g., "Primary USDT on Tron") |
-| `required_confirmations` | integer | Number of block confirmations before payment is final |
+| `wallet_id` | string | Reference to your registered wallet |
+| `display_name` | string | Human-readable label (e.g., "USDT on Tron") |
 | `min_amount_usd` | number | Minimum payment amount in USD (optional) |
 | `max_amount_usd` | number | Maximum payment amount in USD (optional) |
 | `is_default` | boolean | Whether this is the default payment method |
 | `status` | string | `active` or `disabled` |
 
-<Warning>
-  The `required_confirmations` field has sensible defaults per chain (Tron: 20, Arbitrum: 12, Base: 12).
-  Lowering this value increases the risk of accepting payments from transactions that could be reversed.
-  Only change this if you understand the security implications.
-</Warning>
+---
 
-## Default Payment Method
+## Default payment method
 
-You can designate one payment method as your **default**. The default payment method is used when:
+One payment method can be marked as the **default**. It is used automatically when a checkout, payment link, or subscription does not specify a `payment_method_id`.
 
-- A checkout is created without specifying a `payment_method_id`
-- A payment link does not have a payment method assigned
-- A subscription plan does not specify a payment method
+Setting a new default unsets the previous one.
 
-Only one payment method can be the default at a time. Setting a new default automatically unsets the previous one.
+---
 
-## Status Lifecycle
+## Wallets vs. payment methods
 
-Payment methods have a simple two-state lifecycle:
+A **wallet** is a blockchain address you own — register it once under **Settings > Wallets**. A **payment method** is a configured receiving rail built on top of a wallet.
 
-```mermaid
-stateDiagram-v2
-    [*] --> active : Created
-    active --> disabled : Disable
-    disabled --> active : Re-enable
-```
+One wallet can back multiple payment methods. For example, a single Tron wallet could have one payment method for USDT and another for USDC, each with different amount limits.
+
+---
+
+## Status lifecycle
 
 | Status | Behavior |
 |--------|----------|
 | `active` | Available for new checkouts and subscriptions |
-| `disabled` | Cannot be used for new checkouts. Existing in-progress checkouts continue to settle normally. |
+| `disabled` | Cannot be used for new checkouts. In-flight payments continue to settle normally. |
 
-<Info>
-  Disabling a payment method does not affect in-flight payments. Any checkout that is already
-  `pending`, `detected`, or `confirming` will continue through to completion.
-</Info>
+---
 
-## Code Examples
+<Accordion title="Advanced Security & Finality Settings">
 
-### Create a Payment Method
+The fields below control blockchain-level confirmation behavior. billing.io sets safe defaults per chain — most integrations do not need to change these.
+
+### `required_confirmations`
+
+The number of block confirmations billing.io waits before marking a payment as final. Higher values reduce the risk of chain reorganizations reversing a transaction.
+
+| Chain | Default | Approximate Time |
+|-------|---------|------------------|
+| Tron | 20 blocks | ~60 seconds |
+| Arbitrum | 12 blocks | ~3 seconds |
+| Base | 12 blocks | ~24 seconds |
+
+<Warning>
+  Lowering `required_confirmations` increases speed but reduces finality assurance. Transactions with fewer confirmations have a higher probability of being reversed during a chain reorganization. Only change this if you understand the trade-off between speed and settlement safety.
+</Warning>
+
+### Chain reorganization risk
+
+A **chain reorganization** (re-org) occurs when the blockchain rewrites recent history, potentially reversing confirmed transactions. The default confirmation thresholds are set to make re-org risk negligible for each supported chain.
+
+- **Tron**: Delegated Proof of Stake with 27 super representatives. 20 confirmations provides strong finality.
+- **Arbitrum**: Optimistic rollup anchored to Ethereum. 12 L2 confirmations is conservative for typical transactions.
+- **Base**: Optimistic rollup anchored to Ethereum. Same model as Arbitrum.
+
+If your use case involves high-value transactions and you want maximum safety, you can _increase_ the confirmation threshold above the default.
+
+</Accordion>
+
+---
+
+## Code examples
+
+### Create a payment method
 
 <CodeGroup>
 ```bash curl
-curl -X POST https://api.billing.io/api/payment-methods \
+curl -X POST https://api.billing.io/v1/payment-methods \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "chain": "tron",
     "token": "USDT",
     "wallet_id": "wal_abc123",
-    "display_name": "Primary USDT on Tron",
-    "required_confirmations": 20,
-    "min_amount_usd": 5.00,
-    "max_amount_usd": 10000.00,
+    "display_name": "USDT on Tron",
     "is_default": true
   }'
 ```
 
 ```javascript node.js
-const response = await fetch("https://api.billing.io/api/payment-methods", {
+const response = await fetch("https://api.billing.io/v1/payment-methods", {
   method: "POST",
   headers: {
     Authorization: "Bearer YOUR_API_KEY",
@@ -128,10 +127,7 @@ const response = await fetch("https://api.billing.io/api/payment-methods", {
     chain: "tron",
     token: "USDT",
     wallet_id: "wal_abc123",
-    display_name: "Primary USDT on Tron",
-    required_confirmations: 20,
-    min_amount_usd: 5.0,
-    max_amount_usd: 10000.0,
+    display_name: "USDT on Tron",
     is_default: true,
   }),
 });
@@ -141,16 +137,16 @@ console.log(paymentMethod.id); // pm_a1b2c3d4e5f6...
 ```
 </CodeGroup>
 
-### List Payment Methods
+### List payment methods
 
 <CodeGroup>
 ```bash curl
-curl https://api.billing.io/api/payment-methods \
+curl https://api.billing.io/v1/payment-methods \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 ```javascript node.js
-const response = await fetch("https://api.billing.io/api/payment-methods", {
+const response = await fetch("https://api.billing.io/v1/payment-methods", {
   headers: {
     Authorization: "Bearer YOUR_API_KEY",
   },
@@ -161,17 +157,17 @@ const { data } = await response.json();
 ```
 </CodeGroup>
 
-### Set as Default
+### Set as default
 
 <CodeGroup>
 ```bash curl
-curl -X POST https://api.billing.io/api/payment-methods/pm_a1b2c3d4e5f6/default \
+curl -X POST https://api.billing.io/v1/payment-methods/pm_a1b2c3d4e5f6/default \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 ```javascript node.js
 const response = await fetch(
-  "https://api.billing.io/api/payment-methods/pm_a1b2c3d4e5f6/default",
+  "https://api.billing.io/v1/payment-methods/pm_a1b2c3d4e5f6/default",
   {
     method: "POST",
     headers: {
@@ -182,11 +178,11 @@ const response = await fetch(
 ```
 </CodeGroup>
 
-### Disable a Payment Method
+### Disable a payment method
 
 <CodeGroup>
 ```bash curl
-curl -X PATCH https://api.billing.io/api/payment-methods/pm_a1b2c3d4e5f6 \
+curl -X PATCH https://api.billing.io/v1/payment-methods/pm_a1b2c3d4e5f6 \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "status": "disabled" }'
@@ -194,7 +190,7 @@ curl -X PATCH https://api.billing.io/api/payment-methods/pm_a1b2c3d4e5f6 \
 
 ```javascript node.js
 const response = await fetch(
-  "https://api.billing.io/api/payment-methods/pm_a1b2c3d4e5f6",
+  "https://api.billing.io/v1/payment-methods/pm_a1b2c3d4e5f6",
   {
     method: "PATCH",
     headers: {
@@ -207,23 +203,19 @@ const response = await fetch(
 ```
 </CodeGroup>
 
-## Best Practices
+## Best practices
 
 <CardGroup cols={2}>
   <Card title="One method per chain-token pair" icon="layer-group">
-    For most setups, create one payment method per chain and token combination.
-    This keeps your configuration clean and your reporting straightforward.
+    Keep your configuration clean with one payment method per chain and token combination.
   </Card>
   <Card title="Set amount limits" icon="shield">
-    Use `min_amount_usd` to avoid dust payments and `max_amount_usd` to limit
-    exposure per transaction. You can always adjust these later.
+    Use `min_amount_usd` to avoid dust payments and `max_amount_usd` to limit exposure per transaction.
   </Card>
   <Card title="Always have a default" icon="star">
-    Ensure you have a default payment method set. This prevents errors when
-    checkouts or subscriptions are created without specifying one explicitly.
+    A default payment method prevents errors when checkouts or subscriptions are created without specifying one.
   </Card>
   <Card title="Use display names" icon="tag">
-    Give each payment method a clear `display_name` so your team can easily
-    identify them in the dashboard (e.g., "USDT on Tron - Main" vs "USDC on Base - Testing").
+    Clear `display_name` values help your team identify payment methods in the dashboard.
   </Card>
 </CardGroup>

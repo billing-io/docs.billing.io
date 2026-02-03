@@ -3,15 +3,10 @@ title: "Webhooks"
 description: "Receive real-time event notifications"
 ---
 
-## Overview
-
-Webhooks let billing.io push events to your server in real time. Instead of polling the API, you register an HTTPS endpoint and billing.io sends a POST request whenever something happens -- a checkout is confirmed, a subscription renews, a payout settles, and so on.
-
-Every webhook delivery is signed with HMAC-SHA256 so you can verify it came from billing.io.
+Webhooks push events to your server in real time. Register an HTTPS endpoint and billing.io sends a signed POST request when something happens — a checkout confirms, a subscription renews, a payout settles.
 
 <Info>
-  **Prerequisites** -- Webhooks require the **Starter** plan or above. You need
-  a publicly accessible HTTPS endpoint to receive events.
+  Webhooks require the **Starter** plan or above and a publicly accessible HTTPS endpoint.
 </Info>
 
 ---

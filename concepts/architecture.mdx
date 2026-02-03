@@ -4,21 +4,14 @@ sidebarTitle: "Architecture"
 description: "How billing.io works under the hood"
 ---
 
-## Non-Custodial Model
+<Info>
+  This page covers billing.io's internal architecture. You don't need to read this to integrate —
+  start with the [Quickstart](/quickstart) instead.
+</Info>
 
-billing.io is fundamentally different from traditional payment processors. We **never hold your crypto**. Payments flow directly from your customers to your wallets on-chain. billing.io orchestrates the payment flow, monitors the blockchain for confirmations, and charges orchestration fees separately through Stripe.
+## Non-custodial model
 
-<Note>
-  billing.io charges fees via Stripe (off-chain, post-paid) -- not by deducting from crypto payments.
-  Your customers' payments land in your wallet in full.
-</Note>
-
-This architecture means:
-
-- **No custodial risk** -- billing.io never has access to your funds
-- **No withdrawal delays** -- crypto settles directly to your wallets
-- **Transparent billing** -- orchestration fees appear on your Stripe invoice, separate from crypto revenue
-- **Full audit trail** -- every event is tracked in an immutable ledger
+billing.io is [non-custodial](/what-is-non-custodial). Payments flow directly from customers to your wallets on-chain. billing.io orchestrates the payment flow and monitors the blockchain — fees are charged separately via Stripe, not deducted from payments.
 
 ## Core Domains
 
@@ -55,26 +48,9 @@ billing.io is organized into four core domains, each handling a distinct part of
   </Accordion>
 </AccordionGroup>
 
-## Multi-Tenancy
+## Multi-tenancy
 
-Every resource in billing.io is scoped to an organization via `org_id`. Row Level Security (RLS) policies enforce isolation at the database level using a `get_user_org_ids()` function, so users can only access data belonging to organizations they are members of.
-
-```
-Organizations
-  |
-  +-- Merchants (billing accounts)
-  +-- Payment Methods
-  +-- Customers
-  +-- Subscriptions
-  +-- Payouts
-  +-- Revenue Events
-  +-- ... (all resources)
-```
-
-<Warning>
-  All API calls are automatically scoped to your organization. You cannot access resources belonging to other organizations,
-  even if you know their IDs. RLS is enforced at the database layer, not just the application layer.
-</Warning>
+Every resource is scoped to an organization via `org_id`. Row Level Security (RLS) enforces isolation at the database level — you can only access data belonging to your organization.
 
 ## Environment Isolation
 
@@ -138,51 +114,20 @@ All billing.io resources use prefixed IDs for easy identification. IDs are gener
   When contacting support, sharing the full prefixed ID helps us locate your resource instantly.
 </Info>
 
-## Supported Chains
+## Supported chains
 
-billing.io supports the following blockchain networks and tokens:
+See the [Introduction](/introduction) for the current list of supported chains and tokens. All tokens are USD-pegged stablecoins — no exchange rate risk.
 
-| Chain | Tokens | Required Confirmations | Block Explorer |
-|-------|--------|----------------------|----------------|
-| Tron | USDT, USDC | 20 | [tronscan.org](https://tronscan.org) |
-| Arbitrum | USDT, USDC | 12 | [arbiscan.io](https://arbiscan.io) |
-| Base | USDT, USDC | 12 | [basescan.org](https://basescan.org) |
+## Data flow
 
-<Tip>
-  All supported tokens are stablecoins pegged to USD. This means the amount your customer pays
-  in crypto matches the USD amount you specified -- no exchange rate risk.
-</Tip>
-
-## Data Flow Summary
-
-Here is the end-to-end flow from checkout creation to revenue recording:
+The end-to-end flow from checkout creation to revenue recording:
 
 ```
-Customer initiates payment
-  |
-  v
 Checkout created (pending)
-  |
-  v
-Customer sends crypto to merchant wallet
-  |
-  v
-Chain-watcher detects transaction (detected -> confirming)
-  |
-  v
-Required confirmations reached (confirmed)
-  |
-  v
-Usage reported to Stripe (orchestration fee tracked)
-  |
-  v
-Revenue event created (immutable ledger entry)
-  |
-  v
-Accounting period updated (gross, fees, net)
+  → Customer sends crypto to merchant wallet
+  → Chain-watcher detects transaction (detected → confirming)
+  → Required confirmations reached (confirmed)
+  → Usage reported to Stripe (orchestration fee tracked)
+  → Revenue event created (immutable ledger entry)
+  → Accounting period updated
 ```
-
-<Info>
-  At no point does billing.io take custody of funds. The crypto moves directly from the customer's
-  wallet to the merchant's wallet on-chain. billing.io observes and records.
-</Info>

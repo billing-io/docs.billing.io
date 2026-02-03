@@ -3,24 +3,9 @@ title: "Orchestrate Payouts"
 description: "Create, approve, and verify non-custodial payouts"
 ---
 
-## Overview
+This guide walks through the full payout flow: create an intent, approve it, execute the transfer from your wallet, and let billing.io verify the settlement on-chain.
 
-billing.io provides **non-custodial payout orchestration**. This means billing.io tracks and verifies your outbound payments, but you execute the actual on-chain transactions yourself from your own wallet.
-
-The payout flow:
-
-1. **You create** a payout intent describing what you plan to send
-2. **You approve** the intent (approval workflow)
-3. **You execute** the transfer from your wallet using any tool (wallet app, script, multisig)
-4. **You submit** the transaction hash back to billing.io
-5. **billing.io verifies** the transaction on-chain via the chain-watcher
-6. **billing.io records** a settlement and reconciliation entry
-
-<Info>
-  **Why non-custodial?** billing.io never holds your crypto. You maintain full
-  control of your funds and private keys at all times. billing.io provides the
-  orchestration layer -- tracking intent, verification, and reconciliation.
-</Info>
+See [Payouts](/concepts/payouts) for the conceptual overview.
 
 <Note>
   Payout orchestration requires the **Scale** plan or above. Reconciliation

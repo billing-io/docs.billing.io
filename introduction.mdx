@@ -1,88 +1,58 @@
 ---
 title: "Welcome to billing.io"
 sidebarTitle: "Introduction"
-description: "Non-custodial crypto payment infrastructure for merchants. Accept stablecoin payments, manage subscriptions, orchestrate payouts, and track revenue -- all without ever touching your customers' funds."
+description: "Non-custodial crypto payment infrastructure for merchants. Accept stablecoin payments, manage subscriptions, orchestrate payouts, and track revenue."
 ---
 
 # Non-custodial crypto payments, built for developers
 
-billing.io is a payment processing platform that lets merchants accept USDT and USDC across multiple blockchains. Payments go directly to your wallet -- billing.io never holds your funds.
-
-
-<CardGroup cols={2}>
-  <Card title="What is Non-Custodial?" icon="shield-check" href="/what-is-non-custodial">
-    New to non-custodial payments? Learn how billing.io is fundamentally different from traditional processors -- and why that matters for your business.
-  </Card>
-</CardGroup>
+billing.io lets merchants accept USDT and USDC across multiple blockchains. Payments go directly to your wallet — billing.io never holds your funds.
 
 <CardGroup cols={2}>
   <Card title="Accept Payments" icon="credit-card" href="/quickstart">
-    Create checkouts, generate payment links, and accept USDT/USDC on Tron, Arbitrum, and Base. Funds settle directly to your wallet.
+    Create checkouts, generate payment links, and accept USDT/USDC on Tron, Arbitrum, and Base.
   </Card>
   <Card title="Subscription Billing" icon="repeat" href="/concepts/subscriptions">
-    Build recurring billing for your customers with plans, trials, automated renewals, and feature entitlements.
+    Recurring billing with plans, trials, automated renewals, and feature entitlements.
   </Card>
   <Card title="Payout Orchestration" icon="money-bill-transfer" href="/concepts/payouts">
-    Define payout intents, execute on-chain, and let billing.io verify settlements and reconcile automatically.
+    Define payout intents, execute on-chain, and let billing.io verify and reconcile.
   </Card>
   <Card title="API Reference" icon="code" href="/api-reference/authentication">
-    RESTful API with cursor-based pagination, idempotency support, HMAC-signed webhooks, and full OpenAPI spec.
+    RESTful API with cursor-based pagination, idempotency, HMAC-signed webhooks, and OpenAPI spec.
   </Card>
 </CardGroup>
-
----
-
-## Why billing.io?
-
-<AccordionGroup>
-  <Accordion title="Non-custodial by design">
-    Crypto payments are sent directly to your wallet address. billing.io monitors the blockchain, confirms transactions, and notifies you via webhooks. Your funds are always under your control.
-  </Accordion>
-  <Accordion title="Multi-chain stablecoin support">
-    Accept USDT and USDC on **Tron**, **Arbitrum**, and **Base**. Configure separate payment methods for each chain and token pair, set confirmation thresholds, and define amount limits.
-  </Accordion>
-  <Accordion title="Real-time webhook notifications">
-    Get notified the moment a payment is detected, confirming, or completed. Webhook payloads are signed with HMAC-SHA256, and failed deliveries are retried with exponential backoff.
-  </Accordion>
-  <Accordion title="Full subscription lifecycle">
-    Create plans with daily, weekly, monthly, or yearly intervals. Manage trials, renewals, cancellations, pauses, and feature entitlements through a single API.
-  </Accordion>
-  <Accordion title="Revenue operations built in">
-    Track every payment, subscription charge, refund, and adjustment in an immutable revenue event ledger. Pull accounting period summaries for your books.
-  </Accordion>
-  <Accordion title="Sandbox environment">
-    Every API endpoint works in sandbox mode with `sk_test_` keys. Simulate payments, test webhooks, and validate your integration before going live.
-  </Accordion>
-</AccordionGroup>
-
----
-
-## Supported chains and tokens
-
-| Chain | Tokens | Confirmations |
-|-------|--------|---------------|
-| **Tron** | USDT, USDC | 19 blocks |
-| **Arbitrum** | USDT, USDC | 12 blocks |
-| **Base** | USDT, USDC | 12 blocks |
 
 ---
 
 ## How it works
 
 <Steps>
-  <Step title="Merchant creates a checkout">
+  <Step title="Create a checkout">
     Your backend calls `POST /checkouts` with an amount, chain, and token. billing.io returns a unique deposit address.
   </Step>
   <Step title="Customer sends crypto">
-    The customer sends the exact stablecoin amount to the deposit address. billing.io's chain watcher monitors the blockchain for the incoming transaction.
+    The customer sends stablecoins to the deposit address. billing.io monitors the blockchain for the transaction.
   </Step>
-  <Step title="billing.io confirms the payment">
-    Once the transaction reaches the required number of block confirmations, the checkout status moves to `confirmed` and a `checkout.completed` webhook is fired.
+  <Step title="Payment confirmed">
+    Once the required block confirmations are reached, the checkout status becomes `confirmed` and a `checkout.completed` webhook fires.
   </Step>
-  <Step title="Funds arrive in your wallet">
-    Since billing.io is non-custodial, the funds were sent directly to your configured wallet address. No withdrawal step required.
+  <Step title="Funds in your wallet">
+    Since billing.io is [non-custodial](/what-is-non-custodial), funds were sent directly to your wallet. No withdrawal step needed.
   </Step>
 </Steps>
+
+---
+
+## Supported chains and tokens
+
+| Chain | Tokens | Supported |
+|-------|--------|-----------|
+| **Tron** | USDT, USDC | Production |
+| **Arbitrum** | USDT, USDC | Production |
+| **Base** | USDT, USDC | Production |
+
+All tokens are USD-pegged stablecoins — no exchange rate risk.
 
 ---
 
@@ -92,11 +62,11 @@ billing.io is a payment processing platform that lets merchants accept USDT and 
   <Card title="Quickstart" icon="bolt" href="/quickstart">
     Create your first checkout in under 5 minutes.
   </Card>
-  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
-    Understand the core concepts and system design.
-  </Card>
-  <Card title="Webhooks Guide" icon="webhook" href="/guides/webhooks">
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
     Set up webhook endpoints and verify signatures.
+  </Card>
+  <Card title="Sandbox Testing" icon="flask-vial" href="/guides/sandbox-testing">
+    Test your integration without real funds.
   </Card>
   <Card title="SDKs" icon="puzzle-piece" href="/sdks/javascript">
     Official SDKs for JavaScript, Python, Go, React, Ruby, and Java.

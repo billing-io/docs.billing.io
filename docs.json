@@ -12,6 +12,9 @@
     "light": "#6366f1",
     "dark": "#111111"
   },
+  "fonts": {
+    "family": "Inter"
+  },
   "navbar": {
     "links": [
       { "label": "GitHub", "href": "https://github.com/billing-io" },
@@ -32,29 +35,49 @@
             "group": "Get Started",
             "pages": [
               "introduction",
-              "what-is-non-custodial",
-              "quickstart",
-              "concepts/architecture"
+              "quickstart"
             ]
           },
           {
-            "group": "Core Concepts",
+            "group": "Payments",
             "pages": [
               "concepts/payment-methods",
+              "guides/accept-payments"
+            ]
+          },
+          {
+            "group": "Subscriptions",
+            "pages": [
               "concepts/subscriptions",
+              "guides/subscription-billing"
+            ]
+          },
+          {
+            "group": "Payouts",
+            "pages": [
               "concepts/payouts",
+              "guides/payout-orchestration"
+            ]
+          },
+          {
+            "group": "Revenue Ops",
+            "pages": [
               "concepts/revenue"
             ]
           },
           {
-            "group": "Guides",
+            "group": "Developers",
             "pages": [
-              "guides/accept-payments",
-              "guides/subscription-billing",
-              "guides/payout-orchestration",
               "guides/webhooks",
               "guides/sandbox-testing",
               "guides/idempotency"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "concepts/architecture",
+              "what-is-non-custodial"
             ]
           }
         ]

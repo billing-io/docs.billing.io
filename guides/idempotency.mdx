@@ -3,11 +3,7 @@ title: "Idempotency"
 description: "Safely retry requests without duplicate side effects"
 ---
 
-## Overview
-
-Network errors, timeouts, and retries are inevitable in distributed systems. Without idempotency, a retried `POST /checkouts` request could create two checkouts and charge your customer twice.
-
-billing.io supports **idempotency keys** on mutating endpoints. When you include an `Idempotency-Key` header, billing.io guarantees that the same request is processed only once -- even if you send it multiple times.
+billing.io supports **idempotency keys** on all mutating endpoints. Include an `Idempotency-Key` header and billing.io guarantees the request is processed only once — even if you send it multiple times.
 
 ---
 

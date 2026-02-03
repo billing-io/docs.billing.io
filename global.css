@@ -1,0 +1,48 @@
+/*
+ * billing.io docs — Typography alignment with homepage
+ *
+ * Primary font: Inter (loaded via Mintlify font config)
+ * Mono font: JetBrains Mono (loaded below for code blocks)
+ *
+ * DO NOT override code block syntax highlighting colors.
+ * Only align font stacks, weights, and mono font.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ── Mono font for code ── */
+code, kbd, samp, pre,
+pre code,
+.code-block code,
+[class*="language-"] {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, 'Liberation Mono', monospace !important;
+  font-feature-settings: 'liga' 1, 'calt' 1;
+}
+
+/* Inline code — slightly smaller to sit well in body text */
+:not(pre) > code {
+  font-size: 0.875em;
+  font-weight: 450;
+}
+
+/* ── Heading weight alignment ── */
+h1 {
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+h2 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+h3, h4 {
+  font-weight: 575;
+  letter-spacing: -0.01em;
+}
+
+/* ── Table mono font for field names ── */
+table code {
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace !important;
+  font-size: 0.8125em;
+}
