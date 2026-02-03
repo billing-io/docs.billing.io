@@ -8,7 +8,7 @@ billing.io lets merchants accept stablecoin payments (USDT and USDC) across mult
 
 ## Non-custodial by design
 
-Traditional payment processors (Stripe, PayPal, etc.) receive your customer's money first, hold it, take a cut, and send you the rest days or weeks later. billing.io works differently:
+Traditional payment processors receive your customer's money first, hold it, take a cut, and send you the rest days or weeks later. billing.io works differently:
 
 - **Payments go directly to your wallet** — no intermediary holds your funds
 - **No frozen accounts** — your money is in your wallet the moment it arrives
@@ -16,7 +16,7 @@ Traditional payment processors (Stripe, PayPal, etc.) receive your customer's mo
 - **No counterparty risk** — if billing.io disappeared tomorrow, your funds would be unaffected
 - **Full transparency** — every transaction is verifiable on the public blockchain
 
-billing.io charges orchestration fees separately via Stripe. Fees are never deducted from payments.
+Orchestration fees are charged separately and are never deducted from payments.
 
 ## What billing.io does
 
